@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.io.File;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.rocksdb.RocksDB;
 import org.rocksdb.Options;
@@ -40,7 +42,7 @@ import org.rocksdb.RocksIterator;
  */
 
 public class RocksDBConnector implements MetricStore {
-
+    private final static Logger LOG = LoggerFactory.getLogger(RocksDBConnector.class);
     private RocksDB db;
 
     /**
@@ -54,7 +56,8 @@ public class RocksDBConnector implements MetricStore {
         try {
             validateConfig(config);
         } catch(MetricException e) {
-            System.out.println(e);
+            LOG.error("Invalid config for RocksDB metrics store", e);
+            //TODO-AB: throw a runtime error
         }
 
         RocksDB.loadLibrary();
@@ -71,8 +74,17 @@ public class RocksDBConnector implements MetricStore {
             this.db = RocksDB.open(options, path);
             // do something
         } catch (RocksDBException e) {
-            System.out.println(e);
+            LOG.error("Error opening RockDB database", e);
         }
+
+        try {
+            Long estimatedNumKeys = Long.parseLong(this.db.getProperty("rocksdb.estimate-num-keys"));
+            String stats = this.db.getProperty("rocksdb.stats");
+            LOG.info ("RocksDB has an estimate of {} entries. Stats: {}", estimatedNumKeys, stats);
+        } catch (RocksDBException e) {
+            LOG.error("Error getting RockDB database stats", e);
+        }
+
     }
 
     /**
@@ -85,7 +97,7 @@ public class RocksDBConnector implements MetricStore {
             this.db.put(m.serialize().getBytes(), m.getValue().getBytes());
         }
         catch(RocksDBException e) {
-            System.out.println("oh no!");
+            LOG.error("Error inserting into RocksDB", e);
         }
     }
 
@@ -119,9 +131,11 @@ public class RocksDBConnector implements MetricStore {
         if (prefix != null) {
             return scan(prefix, settings);
         }
+        LOG.info("Cannot obtain prefix, doing full RocksDB scan");
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
+            LOG.info("At key: {}", key);
 
             Metric possibleKey = new Metric(key);
             if (checkMetric(possibleKey, settings)) {
@@ -139,10 +153,12 @@ public class RocksDBConnector implements MetricStore {
      * @return List<String> metrics in store
      */
     private List<String> scan(String prefix, HashMap<String, Object> settings) {
+        LOG.info("Prefix scanning with {}", prefix);
         List<String> result = new ArrayList<String>();
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seek(prefix.getBytes()); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
+            LOG.info("At key: {}", key);
             if (!key.startsWith(prefix)) {
                 break;
             }
@@ -161,7 +177,7 @@ public class RocksDBConnector implements MetricStore {
      * the config specifies not to create the store
      */
     private void validateConfig(Map config) throws MetricException {
-        if (config.get("storm.metrics2.store.connector_class") != "org.apache.storm.metrics2.RocksDBConnector") {
+        if (config.get("storm.metrics2.store.connector_class") != "org.apache.storm.metrics2.store.RocksDBConnector") {
             throw new MetricException("Not a configuration for the RockDB Connector");
         }
 
@@ -191,15 +207,20 @@ public class RocksDBConnector implements MetricStore {
      * the config specifies not to create the store
      */
     private boolean checkMetric(Metric possibleKey, HashMap<String, Object> settings)  {
-        if(settings.containsKey(StringKeywords.component) && !possibleKey.getCompId().equals(settings.get(StringKeywords.component))) {
+        if(settings.containsKey(StringKeywords.component) && 
+                !possibleKey.getCompId().equals(settings.get(StringKeywords.component))) {
             return false;
-        } else if(settings.containsKey(StringKeywords.metricName) && !possibleKey.getMetricName().equals(settings.get(StringKeywords.metricName))) {
+        } else if(settings.containsKey(StringKeywords.metricName) && 
+                !possibleKey.getMetricName().equals(settings.get(StringKeywords.metricName))) {
             return false;
-        } else if(settings.containsKey(StringKeywords.topoId) && !possibleKey.getTopoId().equals(settings.get(StringKeywords.topoId))) {
+        } else if(settings.containsKey(StringKeywords.topoId) && 
+                !possibleKey.getTopoId().equals(settings.get(StringKeywords.topoId))) {
             return false;
-        } else if(settings.containsKey(StringKeywords.timeStart) && possibleKey.getTimeStamp() <= Long.parseLong(settings.get(StringKeywords.timeStart).toString())) {
+        } else if(settings.containsKey(StringKeywords.timeStart) && 
+                possibleKey.getTimeStamp() <= (Long)settings.get(StringKeywords.timeStart)) {
             return false;
-        } else if(settings.containsKey(StringKeywords.timeEnd) && possibleKey.getTimeStamp() >= Long.parseLong(settings.get(StringKeywords.timeEnd).toString())) {
+        } else if(settings.containsKey(StringKeywords.timeEnd) && 
+                possibleKey.getTimeStamp() >= (Long)settings.get(StringKeywords.timeEnd)) {
             return false;
         }
         return true;

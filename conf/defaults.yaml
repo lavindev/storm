@@ -288,6 +288,12 @@ pacemaker.kerberos.users: []
 storm.daemon.metrics.reporter.plugins:
      - "org.apache.storm.daemon.metrics.reporters.JmxPreparableReporter"
 
+storm.metrics2.store.connector_class: "org.apache.storm.metrics2.store.RocksDBConnector"
+storm.metrics2.store.rocksdb.create_if_missing: true
+storm.metrics2.store.rocksdb.location: "/tmp/storm_rocks"
+storm.metrics2.store.rocksdb.retention: 1
+storm.metrics2.store.rocksdb.retention.units: "MINUTES"
+
 storm.metrics.reporters:
     "graphite":
         class: "org.apache.storm.metrics2.reporters.GraphitePreparableReporter"

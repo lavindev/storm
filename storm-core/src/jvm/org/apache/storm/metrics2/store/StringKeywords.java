@@ -22,7 +22,6 @@ public class StringKeywords
 {
     public final static String metricName = "metricName";
     public final static String topoId = "topoId";
-    public final static String time = "time";
     public final static String timeStart = "timeStart";
     public final static String timeEnd = "timeEnd";
     public final static String component = "component";

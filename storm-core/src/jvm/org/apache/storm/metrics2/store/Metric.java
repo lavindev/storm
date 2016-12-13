@@ -35,17 +35,22 @@ public class Metric {
     private String executor;
     private String dimensions;
     private String stream;
-    private static String[] prefixOrder = {StringKeywords.topoId, StringKeywords.metricName, StringKeywords.time,
-                                    StringKeywords.component, StringKeywords.executor, StringKeywords.host,
-                                    StringKeywords.port, StringKeywords.port, StringKeywords.stream};
+    private static String[] prefixOrder = {
+        StringKeywords.topoId, 
+        StringKeywords.metricName, 
+        StringKeywords.timeStart,
+        StringKeywords.component, 
+        StringKeywords.executor, 
+        StringKeywords.host,
+        StringKeywords.port, 
+        StringKeywords.stream
+    };
 
-    public String getValue()
-    {
+    public String getValue() {
         return value;
     }
 
-    public Metric(String metric, Long TS, String executor, String compId, String topoId, String value)
-    {
+    public Metric(String metric, Long TS, String executor, String compId, String topoId, String value) {
         this.metricName = metric;
         this.timestamp = TS;
         this.executor = executor;
@@ -54,8 +59,7 @@ public class Metric {
         this.value = value;
     }
 
-    public Metric(String str)
-    {
+    public Metric(String str) {
         deserialize(str);
     }
 
@@ -67,8 +71,7 @@ public class Metric {
 
     public String getMetricName() { return this.metricName; }
 
-    public String serialize()
-    {
+    public String serialize() {
         StringBuilder x = new StringBuilder();
         x.append(this.topoId);
         x.append("|");
@@ -89,38 +92,36 @@ public class Metric {
         return String.valueOf(x);
     }
 
+    public void deserialize(String str) {
+        String[] elements = str.split("\\|");
+        this.topoId = elements[0];
+        this.metricName = elements[1];
+        this.timestamp = Long.parseLong(elements[2]);
+        this.compId = elements[3];
+        this.executor = elements[4];
+        this.host = elements[5];
+        this.port = Integer.parseInt(elements[6]);
+        this.stream = elements[7];
+    }
+
     public static String createPrefix(HashMap<String, Object> settings){
         StringBuilder x = new StringBuilder();
-        for(String each: prefixOrder){
-            Object cur = settings.get(each);
+        for(String each : prefixOrder) {
+           Object cur = settings.get(each);
             if(cur != null){
                 x.append(cur.toString());
                 x.append("|");
                 settings.remove(each);
-            }
-            else{
+            } else {
                 break;
             }
         }
 
         if(x.length() == 0) {
             return null;
-        }
-        else
-        {
+        } else {
             x.deleteCharAt(x.length()-1);
             return x.toString();
         }
-    }
-
-    public void deserialize(String str)
-    {
-
-        String[] elements = str.split("\\|");
-        this.metricName = elements[1];
-        this.timestamp = Long.parseLong(elements[2]);
-        this.compId = elements[3];
-        this.topoId = elements[0];
-
     }
 }

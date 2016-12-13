@@ -57,13 +57,17 @@ public class Aggregation {
         this.settings.put(StringKeywords.component, comp);
     }
 
-    public void filterTimeStart(Long time) { this.settings.put("startTime", time);}
+    public void filterTimeStart(Long time) { 
+        this.settings.put(StringKeywords.timeStart, time);
+    }
 
-    public void filterTimeEnd(Long time) { this.settings.put("endTime", time);}
+    public void filterTimeEnd(Long time) { 
+        this.settings.put(StringKeywords.timeEnd, time);
+    }
 
-    public void filterTime(String startTime, String endTime) {
-        this.settings.put("startTime", startTime);
-        this.settings.put("endTime", endTime);
+    public void filterTime(Long timeStart, Long timeEnd) {
+        this.settings.put(StringKeywords.timeStart, timeStart);
+        this.settings.put(StringKeywords.timeEnd, timeEnd);
     }
 
     // Aggregations
