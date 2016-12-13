@@ -186,8 +186,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Meter;
-import org.apache.storm.metrics2.store.RocksDBConnector;
+import org.apache.storm.metrics2.store.MetricStoreConfig;
 import org.apache.storm.metrics2.store.Metric;
+import org.apache.storm.metrics2.store.MetricStore;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
@@ -196,7 +197,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     private final static Logger LOG = LoggerFactory.getLogger(Nimbus.class);
     
     //    Metrics
-    private final RocksDBConnector metricsStore;
+    private final MetricStore metricsStore;
     private static final Meter submitTopologyWithOptsCalls = registerMeter("nimbus:num-submitTopologyWithOpts-calls");
     private static final Meter submitTopologyCalls = registerMeter("nimbus:num-submitTopology-calls");
     private static final Meter killTopologyWithOptsCalls = registerMeter("nimbus:num-killTopologyWithOpts-calls");
@@ -1089,8 +1090,8 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     public Nimbus(Map<String, Object> conf, INimbus inimbus, IStormClusterState stormClusterState, NimbusInfo hostPortInfo,
             BlobStore blobStore, ILeaderElector leaderElector, IGroupMappingServiceProvider groupMapper) throws Exception {
         this.conf = conf;
-        this.metricsStore = new RocksDBConnector();
-        this.metricsStore.prepare(conf);
+
+        this.metricsStore = MetricStoreConfig.configure(conf);
 
         if (hostPortInfo == null) {
             hostPortInfo = NimbusInfo.fromConf(conf);
@@ -2536,26 +2537,16 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             long startTime = 0;
             long endTime = 0;
             // TODO-AB: switch over windows and set start/end time
-            //switch (window.getValue()){
-            //    case Window.ALL:
-            //        // NO-OP get all time
-            //        break;
-            //    case Window.FIVE_MIN:
-            //        break;
-            //    case Window.THREE_HR:
-            //        break;
-            //    case Window.ONE_DAY:
-            //        break;
-            //}
 
-            //if (startTime != 0) { 
-            //    agg.filterStartTime(startTime);
-            //} 
-
-            //if (endTime != 0) {
-            //    agg.filterEndTime(endTime);
-            //}
-
+            if (window == Window.ALL){
+                // no time boundaries
+            } else if (window == Window.FIVE_MIN) {
+                agg.filterTimeStart(Time.deltaMs(5*60*1000));
+            } else if (window == Window.THREE_HR) {
+                agg.filterTimeStart(Time.deltaMs(3*3600*1000));
+            } else if (window == Window.ONE_DAY) {
+                agg.filterTimeStart(Time.deltaMs(24*3600*1000));
+            }
             try {
                 double value = agg.sum();
                 windowedStat.set_value (value);
