@@ -178,20 +178,20 @@ class StatsStoreOperation:
 
 class Window:
   ALL = 0
-  FIVE_MIN = 1
+  TEN_MIN = 1
   THREE_HR = 2
   ONE_DAY = 3
 
   _VALUES_TO_NAMES = {
     0: "ALL",
-    1: "FIVE_MIN",
+    1: "TEN_MIN",
     2: "THREE_HR",
     3: "ONE_DAY",
   }
 
   _NAMES_TO_VALUES = {
     "ALL": 0,
-    "FIVE_MIN": 1,
+    "TEN_MIN": 1,
     "THREE_HR": 2,
     "ONE_DAY": 3,
   }
@@ -11278,7 +11278,7 @@ class StatsSpec:
    - topology_id
    - component
    - executor_id
-   - metric
+   - metrics
   """
 
   thrift_spec = (
@@ -11288,16 +11288,16 @@ class StatsSpec:
     (3, TType.STRING, 'topology_id', None, None, ), # 3
     (4, TType.STRING, 'component', None, None, ), # 4
     (5, TType.STRING, 'executor_id', None, None, ), # 5
-    (6, TType.STRING, 'metric', None, None, ), # 6
+    (6, TType.LIST, 'metrics', (TType.STRING,None), None, ), # 6
   )
 
-  def __init__(self, op=thrift_spec[1][4], windows=None, topology_id=None, component=None, executor_id=None, metric=None,):
+  def __init__(self, op=thrift_spec[1][4], windows=None, topology_id=None, component=None, executor_id=None, metrics=None,):
     self.op = op
     self.windows = windows
     self.topology_id = topology_id
     self.component = component
     self.executor_id = executor_id
-    self.metric = metric
+    self.metrics = metrics
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -11339,8 +11339,13 @@ class StatsSpec:
         else:
           iprot.skip(ftype)
       elif fid == 6:
-        if ftype == TType.STRING:
-          self.metric = iprot.readString().decode('utf-8')
+        if ftype == TType.LIST:
+          self.metrics = []
+          (_etype750, _size747) = iprot.readListBegin()
+          for _i751 in xrange(_size747):
+            _elem752 = iprot.readString().decode('utf-8')
+            self.metrics.append(_elem752)
+          iprot.readListEnd()
         else:
           iprot.skip(ftype)
       else:
@@ -11360,8 +11365,8 @@ class StatsSpec:
     if self.windows is not None:
       oprot.writeFieldBegin('windows', TType.LIST, 2)
       oprot.writeListBegin(TType.I32, len(self.windows))
-      for iter747 in self.windows:
-        oprot.writeI32(iter747)
+      for iter753 in self.windows:
+        oprot.writeI32(iter753)
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     if self.topology_id is not None:
@@ -11376,9 +11381,12 @@ class StatsSpec:
       oprot.writeFieldBegin('executor_id', TType.STRING, 5)
       oprot.writeString(self.executor_id.encode('utf-8'))
       oprot.writeFieldEnd()
-    if self.metric is not None:
-      oprot.writeFieldBegin('metric', TType.STRING, 6)
-      oprot.writeString(self.metric.encode('utf-8'))
+    if self.metrics is not None:
+      oprot.writeFieldBegin('metrics', TType.LIST, 6)
+      oprot.writeListBegin(TType.STRING, len(self.metrics))
+      for iter754 in self.metrics:
+        oprot.writeString(iter754.encode('utf-8'))
+      oprot.writeListEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
@@ -11394,7 +11402,7 @@ class StatsSpec:
     value = (value * 31) ^ hash(self.topology_id)
     value = (value * 31) ^ hash(self.component)
     value = (value * 31) ^ hash(self.executor_id)
-    value = (value * 31) ^ hash(self.metric)
+    value = (value * 31) ^ hash(self.metrics)
     return value
 
   def __repr__(self):
@@ -11415,7 +11423,7 @@ class StormWindowedStats:
    - topology_id
    - component
    - executor_id
-   - value
+   - values
   """
 
   thrift_spec = (
@@ -11424,15 +11432,15 @@ class StormWindowedStats:
     (2, TType.STRING, 'topology_id', None, None, ), # 2
     (3, TType.STRING, 'component', None, None, ), # 3
     (4, TType.STRING, 'executor_id', None, None, ), # 4
-    (5, TType.DOUBLE, 'value', None, None, ), # 5
+    (5, TType.MAP, 'values', (TType.STRING,None,TType.DOUBLE,None), None, ), # 5
   )
 
-  def __init__(self, window=None, topology_id=None, component=None, executor_id=None, value=None,):
+  def __init__(self, window=None, topology_id=None, component=None, executor_id=None, values=None,):
     self.window = window
     self.topology_id = topology_id
     self.component = component
     self.executor_id = executor_id
-    self.value = value
+    self.values = values
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -11464,8 +11472,14 @@ class StormWindowedStats:
         else:
           iprot.skip(ftype)
       elif fid == 5:
-        if ftype == TType.DOUBLE:
-          self.value = iprot.readDouble()
+        if ftype == TType.MAP:
+          self.values = {}
+          (_ktype756, _vtype757, _size755 ) = iprot.readMapBegin()
+          for _i759 in xrange(_size755):
+            _key760 = iprot.readString().decode('utf-8')
+            _val761 = iprot.readDouble()
+            self.values[_key760] = _val761
+          iprot.readMapEnd()
         else:
           iprot.skip(ftype)
       else:
@@ -11494,9 +11508,13 @@ class StormWindowedStats:
       oprot.writeFieldBegin('executor_id', TType.STRING, 4)
       oprot.writeString(self.executor_id.encode('utf-8'))
       oprot.writeFieldEnd()
-    if self.value is not None:
-      oprot.writeFieldBegin('value', TType.DOUBLE, 5)
-      oprot.writeDouble(self.value)
+    if self.values is not None:
+      oprot.writeFieldBegin('values', TType.MAP, 5)
+      oprot.writeMapBegin(TType.STRING, TType.DOUBLE, len(self.values))
+      for kiter762,viter763 in self.values.items():
+        oprot.writeString(kiter762.encode('utf-8'))
+        oprot.writeDouble(viter763)
+      oprot.writeMapEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
@@ -11511,7 +11529,7 @@ class StormWindowedStats:
     value = (value * 31) ^ hash(self.topology_id)
     value = (value * 31) ^ hash(self.component)
     value = (value * 31) ^ hash(self.executor_id)
-    value = (value * 31) ^ hash(self.value)
+    value = (value * 31) ^ hash(self.values)
     return value
 
   def __repr__(self):
@@ -11551,11 +11569,11 @@ class StormStats:
       if fid == 1:
         if ftype == TType.LIST:
           self.windowed_stats = []
-          (_etype751, _size748) = iprot.readListBegin()
-          for _i752 in xrange(_size748):
-            _elem753 = StormWindowedStats()
-            _elem753.read(iprot)
-            self.windowed_stats.append(_elem753)
+          (_etype767, _size764) = iprot.readListBegin()
+          for _i768 in xrange(_size764):
+            _elem769 = StormWindowedStats()
+            _elem769.read(iprot)
+            self.windowed_stats.append(_elem769)
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
@@ -11572,8 +11590,8 @@ class StormStats:
     if self.windowed_stats is not None:
       oprot.writeFieldBegin('windowed_stats', TType.LIST, 1)
       oprot.writeListBegin(TType.STRUCT, len(self.windowed_stats))
-      for iter754 in self.windowed_stats:
-        iter754.write(oprot)
+      for iter770 in self.windowed_stats:
+        iter770.write(oprot)
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
@@ -11857,11 +11875,11 @@ class HBRecords:
       if fid == 1:
         if ftype == TType.LIST:
           self.pulses = []
-          (_etype758, _size755) = iprot.readListBegin()
-          for _i759 in xrange(_size755):
-            _elem760 = HBPulse()
-            _elem760.read(iprot)
-            self.pulses.append(_elem760)
+          (_etype774, _size771) = iprot.readListBegin()
+          for _i775 in xrange(_size771):
+            _elem776 = HBPulse()
+            _elem776.read(iprot)
+            self.pulses.append(_elem776)
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
@@ -11878,8 +11896,8 @@ class HBRecords:
     if self.pulses is not None:
       oprot.writeFieldBegin('pulses', TType.LIST, 1)
       oprot.writeListBegin(TType.STRUCT, len(self.pulses))
-      for iter761 in self.pulses:
-        iter761.write(oprot)
+      for iter777 in self.pulses:
+        iter777.write(oprot)
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
@@ -11931,10 +11949,10 @@ class HBNodes:
       if fid == 1:
         if ftype == TType.LIST:
           self.pulseIds = []
-          (_etype765, _size762) = iprot.readListBegin()
-          for _i766 in xrange(_size762):
-            _elem767 = iprot.readString().decode('utf-8')
-            self.pulseIds.append(_elem767)
+          (_etype781, _size778) = iprot.readListBegin()
+          for _i782 in xrange(_size778):
+            _elem783 = iprot.readString().decode('utf-8')
+            self.pulseIds.append(_elem783)
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
@@ -11951,8 +11969,8 @@ class HBNodes:
     if self.pulseIds is not None:
       oprot.writeFieldBegin('pulseIds', TType.LIST, 1)
       oprot.writeListBegin(TType.STRING, len(self.pulseIds))
-      for iter768 in self.pulseIds:
-        oprot.writeString(iter768.encode('utf-8'))
+      for iter784 in self.pulseIds:
+        oprot.writeString(iter784.encode('utf-8'))
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()

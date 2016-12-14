@@ -156,6 +156,7 @@ public class BoltOutputCollectorImpl implements IOutputCollector {
 
     private long tupleTimeDelta(TupleImpl tuple) {
         Long ms = tuple.getProcessSampleStartTime();
+        LOG.info("Got time {} with delta {}", ms, Time.deltaMs(ms));
         if (ms != null)
             return Time.deltaMs(ms);
         return 0;

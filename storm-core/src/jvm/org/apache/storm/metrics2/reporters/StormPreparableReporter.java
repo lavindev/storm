@@ -170,6 +170,15 @@ public class StormPreparableReporter implements PreparableReporter {
                     workerStats.put_to_metrics(key, new Double(reportCount));
                 }
             }
+            if (gauges != null) {
+                for (Map.Entry<String, Gauge> c : gauges.entrySet()) {
+                    String key = c.getKey();
+                    LOG.info("Gauge {}", key);
+                    long value = (Long)c.getValue().getValue();
+                    LOG.info("Gauge k {} v {}", key, value);
+                    workerStats.put_to_metrics(key, value);
+                }
+            }
             if (histograms != null) {
                 for (Map.Entry<String, Histogram> c : histograms.entrySet()) {
                     String key = c.getKey();

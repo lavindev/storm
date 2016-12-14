@@ -24,6 +24,8 @@ import org.apache.storm.metric.internal.MultiCountStatAndMetric;
 import org.apache.storm.metric.internal.MultiLatencyStatAndMetric;
 
 import org.apache.storm.metrics2.StormMetricRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Counter;
 
@@ -35,6 +37,8 @@ public class SpoutExecutorStats extends CommonStats {
     public static final String ACKED = "acked";
     public static final String FAILED = "failed";
     public static final String COMPLETE_LATENCIES = "complete-latencies";
+
+    private static final Logger LOG = LoggerFactory.getLogger(SpoutExecutorStats.class);
 
     public SpoutExecutorStats(List<Long> executorId, StormMetricRegistry metrics, int rate) {
         super(executorId, metrics, rate);
@@ -56,12 +60,15 @@ public class SpoutExecutorStats extends CommonStats {
     }
 
     public void spoutAckedTuple(String stream, long latencyMs) {
+        LOG.info("spoutAckedTuple called for {} with latency {}", stream, latencyMs);
         this.getAcked().incBy(stream, this.rate);
         this.getCounter("common", stream, ACKED).inc(this.rate);
         this.getCompleteLatencies().record(stream, latencyMs);
+        this.getGauge("common", stream, COMPLETE_LATENCIES).update(latencyMs);
     }
 
     public void spoutFailedTuple(String stream, long latencyMs) {
+        LOG.info("spoutFailedTuple called for {} with latency {}", stream, latencyMs);
         this.getFailed().incBy(stream, this.rate);
         this.getCounter("common", stream, FAILED).inc(this.rate);
     }

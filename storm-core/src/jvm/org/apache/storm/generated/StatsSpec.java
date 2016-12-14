@@ -60,7 +60,7 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
   private static final org.apache.thrift.protocol.TField TOPOLOGY_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("topology_id", org.apache.thrift.protocol.TType.STRING, (short)3);
   private static final org.apache.thrift.protocol.TField COMPONENT_FIELD_DESC = new org.apache.thrift.protocol.TField("component", org.apache.thrift.protocol.TType.STRING, (short)4);
   private static final org.apache.thrift.protocol.TField EXECUTOR_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("executor_id", org.apache.thrift.protocol.TType.STRING, (short)5);
-  private static final org.apache.thrift.protocol.TField METRIC_FIELD_DESC = new org.apache.thrift.protocol.TField("metric", org.apache.thrift.protocol.TType.STRING, (short)6);
+  private static final org.apache.thrift.protocol.TField METRICS_FIELD_DESC = new org.apache.thrift.protocol.TField("metrics", org.apache.thrift.protocol.TType.LIST, (short)6);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -73,7 +73,7 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
   private String topology_id; // optional
   private String component; // optional
   private String executor_id; // optional
-  private String metric; // optional
+  private List<String> metrics; // optional
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
@@ -86,7 +86,7 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     TOPOLOGY_ID((short)3, "topology_id"),
     COMPONENT((short)4, "component"),
     EXECUTOR_ID((short)5, "executor_id"),
-    METRIC((short)6, "metric");
+    METRICS((short)6, "metrics");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -111,8 +111,8 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
           return COMPONENT;
         case 5: // EXECUTOR_ID
           return EXECUTOR_ID;
-        case 6: // METRIC
-          return METRIC;
+        case 6: // METRICS
+          return METRICS;
         default:
           return null;
       }
@@ -153,7 +153,7 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
   }
 
   // isset id assignments
-  private static final _Fields optionals[] = {_Fields.OP,_Fields.WINDOWS,_Fields.TOPOLOGY_ID,_Fields.COMPONENT,_Fields.EXECUTOR_ID,_Fields.METRIC};
+  private static final _Fields optionals[] = {_Fields.OP,_Fields.WINDOWS,_Fields.TOPOLOGY_ID,_Fields.COMPONENT,_Fields.EXECUTOR_ID,_Fields.METRICS};
   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
   static {
     Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
@@ -168,8 +168,9 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
     tmpMap.put(_Fields.EXECUTOR_ID, new org.apache.thrift.meta_data.FieldMetaData("executor_id", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
-    tmpMap.put(_Fields.METRIC, new org.apache.thrift.meta_data.FieldMetaData("metric", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
-        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+    tmpMap.put(_Fields.METRICS, new org.apache.thrift.meta_data.FieldMetaData("metrics", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
+        new org.apache.thrift.meta_data.ListMetaData(org.apache.thrift.protocol.TType.LIST, 
+            new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING))));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(StatsSpec.class, metaDataMap);
   }
@@ -202,8 +203,9 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     if (other.is_set_executor_id()) {
       this.executor_id = other.executor_id;
     }
-    if (other.is_set_metric()) {
-      this.metric = other.metric;
+    if (other.is_set_metrics()) {
+      List<String> __this__metrics = new ArrayList<String>(other.metrics);
+      this.metrics = __this__metrics;
     }
   }
 
@@ -219,7 +221,7 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     this.topology_id = null;
     this.component = null;
     this.executor_id = null;
-    this.metric = null;
+    this.metrics = null;
   }
 
   /**
@@ -360,26 +362,41 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     }
   }
 
-  public String get_metric() {
-    return this.metric;
+  public int get_metrics_size() {
+    return (this.metrics == null) ? 0 : this.metrics.size();
   }
 
-  public void set_metric(String metric) {
-    this.metric = metric;
+  public java.util.Iterator<String> get_metrics_iterator() {
+    return (this.metrics == null) ? null : this.metrics.iterator();
   }
 
-  public void unset_metric() {
-    this.metric = null;
+  public void add_to_metrics(String elem) {
+    if (this.metrics == null) {
+      this.metrics = new ArrayList<String>();
+    }
+    this.metrics.add(elem);
   }
 
-  /** Returns true if field metric is set (has been assigned a value) and false otherwise */
-  public boolean is_set_metric() {
-    return this.metric != null;
+  public List<String> get_metrics() {
+    return this.metrics;
   }
 
-  public void set_metric_isSet(boolean value) {
+  public void set_metrics(List<String> metrics) {
+    this.metrics = metrics;
+  }
+
+  public void unset_metrics() {
+    this.metrics = null;
+  }
+
+  /** Returns true if field metrics is set (has been assigned a value) and false otherwise */
+  public boolean is_set_metrics() {
+    return this.metrics != null;
+  }
+
+  public void set_metrics_isSet(boolean value) {
     if (!value) {
-      this.metric = null;
+      this.metrics = null;
     }
   }
 
@@ -425,11 +442,11 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       }
       break;
 
-    case METRIC:
+    case METRICS:
       if (value == null) {
-        unset_metric();
+        unset_metrics();
       } else {
-        set_metric((String)value);
+        set_metrics((List<String>)value);
       }
       break;
 
@@ -453,8 +470,8 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     case EXECUTOR_ID:
       return get_executor_id();
 
-    case METRIC:
-      return get_metric();
+    case METRICS:
+      return get_metrics();
 
     }
     throw new IllegalStateException();
@@ -477,8 +494,8 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       return is_set_component();
     case EXECUTOR_ID:
       return is_set_executor_id();
-    case METRIC:
-      return is_set_metric();
+    case METRICS:
+      return is_set_metrics();
     }
     throw new IllegalStateException();
   }
@@ -541,12 +558,12 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
         return false;
     }
 
-    boolean this_present_metric = true && this.is_set_metric();
-    boolean that_present_metric = true && that.is_set_metric();
-    if (this_present_metric || that_present_metric) {
-      if (!(this_present_metric && that_present_metric))
+    boolean this_present_metrics = true && this.is_set_metrics();
+    boolean that_present_metrics = true && that.is_set_metrics();
+    if (this_present_metrics || that_present_metrics) {
+      if (!(this_present_metrics && that_present_metrics))
         return false;
-      if (!this.metric.equals(that.metric))
+      if (!this.metrics.equals(that.metrics))
         return false;
     }
 
@@ -582,10 +599,10 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     if (present_executor_id)
       list.add(executor_id);
 
-    boolean present_metric = true && (is_set_metric());
-    list.add(present_metric);
-    if (present_metric)
-      list.add(metric);
+    boolean present_metrics = true && (is_set_metrics());
+    list.add(present_metrics);
+    if (present_metrics)
+      list.add(metrics);
 
     return list.hashCode();
   }
@@ -648,12 +665,12 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
         return lastComparison;
       }
     }
-    lastComparison = Boolean.valueOf(is_set_metric()).compareTo(other.is_set_metric());
+    lastComparison = Boolean.valueOf(is_set_metrics()).compareTo(other.is_set_metrics());
     if (lastComparison != 0) {
       return lastComparison;
     }
-    if (is_set_metric()) {
-      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.metric, other.metric);
+    if (is_set_metrics()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.metrics, other.metrics);
       if (lastComparison != 0) {
         return lastComparison;
       }
@@ -727,13 +744,13 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       }
       first = false;
     }
-    if (is_set_metric()) {
+    if (is_set_metrics()) {
       if (!first) sb.append(", ");
-      sb.append("metric:");
-      if (this.metric == null) {
+      sb.append("metrics:");
+      if (this.metrics == null) {
         sb.append("null");
       } else {
-        sb.append(this.metric);
+        sb.append(this.metrics);
       }
       first = false;
     }
@@ -830,10 +847,20 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
-          case 6: // METRIC
-            if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
-              struct.metric = iprot.readString();
-              struct.set_metric_isSet(true);
+          case 6: // METRICS
+            if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
+              {
+                org.apache.thrift.protocol.TList _list833 = iprot.readListBegin();
+                struct.metrics = new ArrayList<String>(_list833.size);
+                String _elem834;
+                for (int _i835 = 0; _i835 < _list833.size; ++_i835)
+                {
+                  _elem834 = iprot.readString();
+                  struct.metrics.add(_elem834);
+                }
+                iprot.readListEnd();
+              }
+              struct.set_metrics_isSet(true);
             } else { 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
@@ -863,9 +890,9 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
           oprot.writeFieldBegin(WINDOWS_FIELD_DESC);
           {
             oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I32, struct.windows.size()));
-            for (Window _iter833 : struct.windows)
+            for (Window _iter836 : struct.windows)
             {
-              oprot.writeI32(_iter833.getValue());
+              oprot.writeI32(_iter836.getValue());
             }
             oprot.writeListEnd();
           }
@@ -893,10 +920,17 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
           oprot.writeFieldEnd();
         }
       }
-      if (struct.metric != null) {
-        if (struct.is_set_metric()) {
-          oprot.writeFieldBegin(METRIC_FIELD_DESC);
-          oprot.writeString(struct.metric);
+      if (struct.metrics != null) {
+        if (struct.is_set_metrics()) {
+          oprot.writeFieldBegin(METRICS_FIELD_DESC);
+          {
+            oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, struct.metrics.size()));
+            for (String _iter837 : struct.metrics)
+            {
+              oprot.writeString(_iter837);
+            }
+            oprot.writeListEnd();
+          }
           oprot.writeFieldEnd();
         }
       }
@@ -933,7 +967,7 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       if (struct.is_set_executor_id()) {
         optionals.set(4);
       }
-      if (struct.is_set_metric()) {
+      if (struct.is_set_metrics()) {
         optionals.set(5);
       }
       oprot.writeBitSet(optionals, 6);
@@ -943,9 +977,9 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       if (struct.is_set_windows()) {
         {
           oprot.writeI32(struct.windows.size());
-          for (Window _iter834 : struct.windows)
+          for (Window _iter838 : struct.windows)
           {
-            oprot.writeI32(_iter834.getValue());
+            oprot.writeI32(_iter838.getValue());
           }
         }
       }
@@ -958,8 +992,14 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       if (struct.is_set_executor_id()) {
         oprot.writeString(struct.executor_id);
       }
-      if (struct.is_set_metric()) {
-        oprot.writeString(struct.metric);
+      if (struct.is_set_metrics()) {
+        {
+          oprot.writeI32(struct.metrics.size());
+          for (String _iter839 : struct.metrics)
+          {
+            oprot.writeString(_iter839);
+          }
+        }
       }
     }
 
@@ -973,13 +1013,13 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       }
       if (incoming.get(1)) {
         {
-          org.apache.thrift.protocol.TList _list835 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I32, iprot.readI32());
-          struct.windows = new ArrayList<Window>(_list835.size);
-          Window _elem836;
-          for (int _i837 = 0; _i837 < _list835.size; ++_i837)
+          org.apache.thrift.protocol.TList _list840 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I32, iprot.readI32());
+          struct.windows = new ArrayList<Window>(_list840.size);
+          Window _elem841;
+          for (int _i842 = 0; _i842 < _list840.size; ++_i842)
           {
-            _elem836 = org.apache.storm.generated.Window.findByValue(iprot.readI32());
-            struct.windows.add(_elem836);
+            _elem841 = org.apache.storm.generated.Window.findByValue(iprot.readI32());
+            struct.windows.add(_elem841);
           }
         }
         struct.set_windows_isSet(true);
@@ -997,8 +1037,17 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
         struct.set_executor_id_isSet(true);
       }
       if (incoming.get(5)) {
-        struct.metric = iprot.readString();
-        struct.set_metric_isSet(true);
+        {
+          org.apache.thrift.protocol.TList _list843 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, iprot.readI32());
+          struct.metrics = new ArrayList<String>(_list843.size);
+          String _elem844;
+          for (int _i845 = 0; _i845 < _list843.size; ++_i845)
+          {
+            _elem844 = iprot.readString();
+            struct.metrics.add(_elem844);
+          }
+        }
+        struct.set_metrics_isSet(true);
       }
     }
   }

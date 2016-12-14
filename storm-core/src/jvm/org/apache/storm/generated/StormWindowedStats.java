@@ -59,7 +59,7 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
   private static final org.apache.thrift.protocol.TField TOPOLOGY_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("topology_id", org.apache.thrift.protocol.TType.STRING, (short)2);
   private static final org.apache.thrift.protocol.TField COMPONENT_FIELD_DESC = new org.apache.thrift.protocol.TField("component", org.apache.thrift.protocol.TType.STRING, (short)3);
   private static final org.apache.thrift.protocol.TField EXECUTOR_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("executor_id", org.apache.thrift.protocol.TType.STRING, (short)4);
-  private static final org.apache.thrift.protocol.TField VALUE_FIELD_DESC = new org.apache.thrift.protocol.TField("value", org.apache.thrift.protocol.TType.DOUBLE, (short)5);
+  private static final org.apache.thrift.protocol.TField VALUES_FIELD_DESC = new org.apache.thrift.protocol.TField("values", org.apache.thrift.protocol.TType.MAP, (short)5);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -71,7 +71,7 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
   private String topology_id; // optional
   private String component; // optional
   private String executor_id; // optional
-  private double value; // optional
+  private Map<String,Double> values; // optional
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
@@ -83,7 +83,7 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
     TOPOLOGY_ID((short)2, "topology_id"),
     COMPONENT((short)3, "component"),
     EXECUTOR_ID((short)4, "executor_id"),
-    VALUE((short)5, "value");
+    VALUES((short)5, "values");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -106,8 +106,8 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
           return COMPONENT;
         case 4: // EXECUTOR_ID
           return EXECUTOR_ID;
-        case 5: // VALUE
-          return VALUE;
+        case 5: // VALUES
+          return VALUES;
         default:
           return null;
       }
@@ -148,9 +148,7 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
   }
 
   // isset id assignments
-  private static final int __VALUE_ISSET_ID = 0;
-  private byte __isset_bitfield = 0;
-  private static final _Fields optionals[] = {_Fields.WINDOW,_Fields.TOPOLOGY_ID,_Fields.COMPONENT,_Fields.EXECUTOR_ID,_Fields.VALUE};
+  private static final _Fields optionals[] = {_Fields.WINDOW,_Fields.TOPOLOGY_ID,_Fields.COMPONENT,_Fields.EXECUTOR_ID,_Fields.VALUES};
   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
   static {
     Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
@@ -162,8 +160,10 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
     tmpMap.put(_Fields.EXECUTOR_ID, new org.apache.thrift.meta_data.FieldMetaData("executor_id", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
-    tmpMap.put(_Fields.VALUE, new org.apache.thrift.meta_data.FieldMetaData("value", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
-        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.DOUBLE)));
+    tmpMap.put(_Fields.VALUES, new org.apache.thrift.meta_data.FieldMetaData("values", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
+        new org.apache.thrift.meta_data.MapMetaData(org.apache.thrift.protocol.TType.MAP, 
+            new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING), 
+            new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.DOUBLE))));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(StormWindowedStats.class, metaDataMap);
   }
@@ -175,7 +175,6 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
    * Performs a deep copy on <i>other</i>.
    */
   public StormWindowedStats(StormWindowedStats other) {
-    __isset_bitfield = other.__isset_bitfield;
     if (other.is_set_window()) {
       this.window = other.window;
     }
@@ -188,7 +187,10 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
     if (other.is_set_executor_id()) {
       this.executor_id = other.executor_id;
     }
-    this.value = other.value;
+    if (other.is_set_values()) {
+      Map<String,Double> __this__values = new HashMap<String,Double>(other.values);
+      this.values = __this__values;
+    }
   }
 
   public StormWindowedStats deepCopy() {
@@ -201,8 +203,7 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
     this.topology_id = null;
     this.component = null;
     this.executor_id = null;
-    set_value_isSet(false);
-    this.value = 0.0;
+    this.values = null;
   }
 
   /**
@@ -305,26 +306,38 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
     }
   }
 
-  public double get_value() {
-    return this.value;
+  public int get_values_size() {
+    return (this.values == null) ? 0 : this.values.size();
   }
 
-  public void set_value(double value) {
-    this.value = value;
-    set_value_isSet(true);
+  public void put_to_values(String key, double val) {
+    if (this.values == null) {
+      this.values = new HashMap<String,Double>();
+    }
+    this.values.put(key, val);
   }
 
-  public void unset_value() {
-    __isset_bitfield = EncodingUtils.clearBit(__isset_bitfield, __VALUE_ISSET_ID);
+  public Map<String,Double> get_values() {
+    return this.values;
   }
 
-  /** Returns true if field value is set (has been assigned a value) and false otherwise */
-  public boolean is_set_value() {
-    return EncodingUtils.testBit(__isset_bitfield, __VALUE_ISSET_ID);
+  public void set_values(Map<String,Double> values) {
+    this.values = values;
   }
 
-  public void set_value_isSet(boolean value) {
-    __isset_bitfield = EncodingUtils.setBit(__isset_bitfield, __VALUE_ISSET_ID, value);
+  public void unset_values() {
+    this.values = null;
+  }
+
+  /** Returns true if field values is set (has been assigned a value) and false otherwise */
+  public boolean is_set_values() {
+    return this.values != null;
+  }
+
+  public void set_values_isSet(boolean value) {
+    if (!value) {
+      this.values = null;
+    }
   }
 
   public void setFieldValue(_Fields field, Object value) {
@@ -361,11 +374,11 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
       }
       break;
 
-    case VALUE:
+    case VALUES:
       if (value == null) {
-        unset_value();
+        unset_values();
       } else {
-        set_value((Double)value);
+        set_values((Map<String,Double>)value);
       }
       break;
 
@@ -386,8 +399,8 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
     case EXECUTOR_ID:
       return get_executor_id();
 
-    case VALUE:
-      return get_value();
+    case VALUES:
+      return get_values();
 
     }
     throw new IllegalStateException();
@@ -408,8 +421,8 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
       return is_set_component();
     case EXECUTOR_ID:
       return is_set_executor_id();
-    case VALUE:
-      return is_set_value();
+    case VALUES:
+      return is_set_values();
     }
     throw new IllegalStateException();
   }
@@ -463,12 +476,12 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
         return false;
     }
 
-    boolean this_present_value = true && this.is_set_value();
-    boolean that_present_value = true && that.is_set_value();
-    if (this_present_value || that_present_value) {
-      if (!(this_present_value && that_present_value))
+    boolean this_present_values = true && this.is_set_values();
+    boolean that_present_values = true && that.is_set_values();
+    if (this_present_values || that_present_values) {
+      if (!(this_present_values && that_present_values))
         return false;
-      if (this.value != that.value)
+      if (!this.values.equals(that.values))
         return false;
     }
 
@@ -499,10 +512,10 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
     if (present_executor_id)
       list.add(executor_id);
 
-    boolean present_value = true && (is_set_value());
-    list.add(present_value);
-    if (present_value)
-      list.add(value);
+    boolean present_values = true && (is_set_values());
+    list.add(present_values);
+    if (present_values)
+      list.add(values);
 
     return list.hashCode();
   }
@@ -555,12 +568,12 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
         return lastComparison;
       }
     }
-    lastComparison = Boolean.valueOf(is_set_value()).compareTo(other.is_set_value());
+    lastComparison = Boolean.valueOf(is_set_values()).compareTo(other.is_set_values());
     if (lastComparison != 0) {
       return lastComparison;
     }
-    if (is_set_value()) {
-      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.value, other.value);
+    if (is_set_values()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.values, other.values);
       if (lastComparison != 0) {
         return lastComparison;
       }
@@ -624,10 +637,14 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
       }
       first = false;
     }
-    if (is_set_value()) {
+    if (is_set_values()) {
       if (!first) sb.append(", ");
-      sb.append("value:");
-      sb.append(this.value);
+      sb.append("values:");
+      if (this.values == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.values);
+      }
       first = false;
     }
     sb.append(")");
@@ -649,8 +666,6 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
 
   private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
     try {
-      // it doesn't seem like you should have to do this, but java serialization is wacky, and doesn't call the default constructor.
-      __isset_bitfield = 0;
       read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
     } catch (org.apache.thrift.TException te) {
       throw new java.io.IOException(te);
@@ -707,10 +722,22 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
-          case 5: // VALUE
-            if (schemeField.type == org.apache.thrift.protocol.TType.DOUBLE) {
-              struct.value = iprot.readDouble();
-              struct.set_value_isSet(true);
+          case 5: // VALUES
+            if (schemeField.type == org.apache.thrift.protocol.TType.MAP) {
+              {
+                org.apache.thrift.protocol.TMap _map846 = iprot.readMapBegin();
+                struct.values = new HashMap<String,Double>(2*_map846.size);
+                String _key847;
+                double _val848;
+                for (int _i849 = 0; _i849 < _map846.size; ++_i849)
+                {
+                  _key847 = iprot.readString();
+                  _val848 = iprot.readDouble();
+                  struct.values.put(_key847, _val848);
+                }
+                iprot.readMapEnd();
+              }
+              struct.set_values_isSet(true);
             } else { 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
@@ -756,10 +783,20 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
           oprot.writeFieldEnd();
         }
       }
-      if (struct.is_set_value()) {
-        oprot.writeFieldBegin(VALUE_FIELD_DESC);
-        oprot.writeDouble(struct.value);
-        oprot.writeFieldEnd();
+      if (struct.values != null) {
+        if (struct.is_set_values()) {
+          oprot.writeFieldBegin(VALUES_FIELD_DESC);
+          {
+            oprot.writeMapBegin(new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.DOUBLE, struct.values.size()));
+            for (Map.Entry<String, Double> _iter850 : struct.values.entrySet())
+            {
+              oprot.writeString(_iter850.getKey());
+              oprot.writeDouble(_iter850.getValue());
+            }
+            oprot.writeMapEnd();
+          }
+          oprot.writeFieldEnd();
+        }
       }
       oprot.writeFieldStop();
       oprot.writeStructEnd();
@@ -791,7 +828,7 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
       if (struct.is_set_executor_id()) {
         optionals.set(3);
       }
-      if (struct.is_set_value()) {
+      if (struct.is_set_values()) {
         optionals.set(4);
       }
       oprot.writeBitSet(optionals, 5);
@@ -807,8 +844,15 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
       if (struct.is_set_executor_id()) {
         oprot.writeString(struct.executor_id);
       }
-      if (struct.is_set_value()) {
-        oprot.writeDouble(struct.value);
+      if (struct.is_set_values()) {
+        {
+          oprot.writeI32(struct.values.size());
+          for (Map.Entry<String, Double> _iter851 : struct.values.entrySet())
+          {
+            oprot.writeString(_iter851.getKey());
+            oprot.writeDouble(_iter851.getValue());
+          }
+        }
       }
     }
 
@@ -833,8 +877,19 @@ public class StormWindowedStats implements org.apache.thrift.TBase<StormWindowed
         struct.set_executor_id_isSet(true);
       }
       if (incoming.get(4)) {
-        struct.value = iprot.readDouble();
-        struct.set_value_isSet(true);
+        {
+          org.apache.thrift.protocol.TMap _map852 = new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.DOUBLE, iprot.readI32());
+          struct.values = new HashMap<String,Double>(2*_map852.size);
+          String _key853;
+          double _val854;
+          for (int _i855 = 0; _i855 < _map852.size; ++_i855)
+          {
+            _key853 = iprot.readString();
+            _val854 = iprot.readDouble();
+            struct.values.put(_key853, _val854);
+          }
+        }
+        struct.set_values_isSet(true);
       }
     }
   }

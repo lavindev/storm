@@ -20,7 +20,7 @@ package org.apache.storm.metrics2.store;
 
 import java.lang.String;
 import java.lang.StringBuilder;
-import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 
 public class Metric {
@@ -104,14 +104,13 @@ public class Metric {
         this.stream = elements[7];
     }
 
-    public static String createPrefix(HashMap<String, Object> settings){
+    public static String createPrefix(Map<String, Object> settings){
         StringBuilder x = new StringBuilder();
         for(String each : prefixOrder) {
            Object cur = settings.get(each);
             if(cur != null){
                 x.append(cur.toString());
                 x.append("|");
-                settings.remove(each);
             } else {
                 break;
             }

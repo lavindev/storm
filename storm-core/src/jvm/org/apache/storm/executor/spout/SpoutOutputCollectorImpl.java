@@ -28,6 +28,8 @@ import org.apache.storm.tuple.Values;
 import org.apache.storm.utils.MutableLong;
 import org.apache.storm.utils.RotatingMap;
 import org.apache.storm.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +37,7 @@ import java.util.Random;
 
 public class SpoutOutputCollectorImpl implements ISpoutOutputCollector {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SpoutOutputCollectorImpl.class);
     private final SpoutExecutor executor;
     private final Task taskData;
     private final int taskId;
@@ -116,6 +119,8 @@ public class SpoutOutputCollectorImpl implements ISpoutOutputCollector {
             sample = executor.getSampler().call();
         } catch (Exception ignored) {
         }
+
+        LOG.info("needAck? {}", needAck);
         if (needAck) {
             TupleInfo info = new TupleInfo();
             info.setTaskId(this.taskId);
@@ -132,6 +137,7 @@ public class SpoutOutputCollectorImpl implements ISpoutOutputCollector {
             List<Object> ackInitTuple = new Values(rootId, Utils.bitXorVals(ackSeq), this.taskId);
             executor.sendUnanchored(taskData, Acker.ACKER_INIT_STREAM_ID, ackInitTuple, executor.getExecutorTransfer());
         } else if (messageId != null) {
+            LOG.info ("Calling ackSpoutMsg {}", executor);
             TupleInfo info = new TupleInfo();
             info.setStream(stream);
             info.setValues(values);
@@ -139,6 +145,7 @@ public class SpoutOutputCollectorImpl implements ISpoutOutputCollector {
             info.setTimestamp(0);
             Long timeDelta = sample ? 0L : null;
             info.setId("0:");
+            LOG.info ("Before call to ackSpoutMsg {}", info);
             executor.ackSpoutMsg(executor, taskData, timeDelta, info);
         }
 

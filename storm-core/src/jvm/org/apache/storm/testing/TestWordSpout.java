@@ -36,9 +36,11 @@ public class TestWordSpout extends BaseRichSpout {
     public static Logger LOG = LoggerFactory.getLogger(TestWordSpout.class);
     boolean _isDistributed;
     SpoutOutputCollector _collector;
+    int msgId;
 
     public TestWordSpout() {
         this(true);
+        msgId = 0;
     }
 
     public TestWordSpout(boolean isDistributed) {
@@ -58,7 +60,7 @@ public class TestWordSpout extends BaseRichSpout {
         final String[] words = new String[] {"nathan", "mike", "jackson", "golda", "bertels"};
         final Random rand = new Random();
         final String word = words[rand.nextInt(words.length)];
-        _collector.emit(new Values(word));
+        _collector.emit(new Values(word), msgId++);
     }
     
     public void ack(Object msgId) {

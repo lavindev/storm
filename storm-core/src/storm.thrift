@@ -636,12 +636,12 @@ enum StatsStoreOperation {
   SUM = 0,
   AVG = 1,
   MIN = 2,
-  MAX = 3 
+  MAX = 3
 }
 
 enum Window {
   ALL       = 0,
-  FIVE_MIN  = 1,
+  TEN_MIN  = 1,
   THREE_HR  = 2,
   ONE_DAY   = 3 
 }
@@ -652,7 +652,7 @@ struct StatsSpec {
   3: optional string topology_id;
   4: optional string component;
   5: optional string executor_id;
-  6: optional string metric;
+  6: optional list<string> metrics;
 }
 
 struct StormWindowedStats {
@@ -660,7 +660,7 @@ struct StormWindowedStats {
   2: optional string topology_id;
   3: optional string component;
   4: optional string executor_id;
-  5: optional double value;
+  5: optional map<string, double> values;
 }
 
 struct StormStats {

@@ -86,8 +86,8 @@ public class BoltExecutorStats extends CommonStats {
         this.getExecuteLatencies().record(key, latencyMs);
 
         this.getCounter(component, stream, EXECUTED).inc(this.rate);
-        //this.getTimer(component, stream, EXECUTE_LATENCIES).update(latencyMs, TimeUnit.MILLISECONDS);
-        this.getHistogram(component, stream, EXECUTE_LATENCIES).update(latencyMs);
+        this.getGauge(component, stream, EXECUTE_LATENCIES).update(latencyMs);
+        //this.getHistogram(component, stream, EXECUTE_LATENCIES).update(latencyMs);
         this.debugSeries(component, stream);
     }
 
@@ -98,7 +98,8 @@ public class BoltExecutorStats extends CommonStats {
             value = new AtomicLong(time);
         }
         value.set(time);
-        this.getHistogram(component, stream, "debug").update(time);
+        //this.getHistogram(component, stream, "debug").update(time);
+        this.getGauge(component, stream, "debug").update(time);
     }
 
     public void boltAckedTuple(String component, String stream, long latencyMs) {
@@ -107,15 +108,14 @@ public class BoltExecutorStats extends CommonStats {
         this.getProcessLatencies().record(key, latencyMs);
 
         this.getCounter(component, stream, ACKED).inc(this.rate);
-        //this.getTimer(component, stream, PROCESS_LATENCIES).update(latencyMs, TimeUnit.MILLISECONDS);
-        this.getHistogram(component, stream, PROCESS_LATENCIES).update(latencyMs);
+        this.getGauge(component, stream, PROCESS_LATENCIES).update(latencyMs);
+        //this.getHistogram(component, stream, PROCESS_LATENCIES).update(latencyMs);
     }
 
     public void boltFailedTuple(String component, String stream, long latencyMs) {
         List key = Lists.newArrayList(component, stream);
         this.getFailed().incBy(key, this.rate);
         this.getCounter(component, stream, FAILED).inc(this.rate);
-
     }
 
     @Override

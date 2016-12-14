@@ -30,7 +30,7 @@ import org.apache.thrift.TEnum;
 
 public enum Window implements org.apache.thrift.TEnum {
   ALL(0),
-  FIVE_MIN(1),
+  TEN_MIN(1),
   THREE_HR(2),
   ONE_DAY(3);
 
@@ -56,7 +56,7 @@ public enum Window implements org.apache.thrift.TEnum {
       case 0:
         return ALL;
       case 1:
-        return FIVE_MIN;
+        return TEN_MIN;
       case 2:
         return THREE_HR;
       case 3:

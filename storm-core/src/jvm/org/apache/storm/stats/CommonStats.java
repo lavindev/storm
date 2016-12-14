@@ -25,12 +25,14 @@ import org.apache.storm.metric.api.IMetric;
 import org.apache.storm.metric.internal.MultiCountStatAndMetric;
 import org.apache.storm.metric.internal.MultiLatencyStatAndMetric;
 import org.apache.storm.metrics2.StormMetricRegistry;
+import org.apache.storm.metrics2.SimpleGauge;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Reservoir;
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.SlidingTimeWindowReservoir;
 import java.util.concurrent.TimeUnit;
 
@@ -104,6 +106,16 @@ public abstract class CommonStats {
         Timer result = this.metrics.getTimers().get(fqMeterName);
         if (result == null) {
             return this.metrics.timer(fqMeterName);
+        }
+        return result;
+    }
+
+    protected SimpleGauge<Long> getGauge(String component, String stream, String metricName){
+        String fqMeterName = this.metrics.scopedName(this.executorIdStr, stream, component, metricName);
+        SimpleGauge<Long> result = (SimpleGauge<Long>)this.metrics.getGauges().get(fqMeterName);
+        if (result == null) {
+            SimpleGauge<Long> simpleGauge = new SimpleGauge<Long>(0L);
+            return this.metrics.register(fqMeterName, simpleGauge);
         }
         return result;
     }

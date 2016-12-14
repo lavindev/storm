@@ -111,7 +111,7 @@ public class Aggregation {
         Integer count = 0;
         List<String> x = this.store.scan(settings);
         for(String each : x) {
-            sum += Integer.parseInt(each);
+            sum += Double.parseDouble(each);
             count++;
         }
         return sum / count;

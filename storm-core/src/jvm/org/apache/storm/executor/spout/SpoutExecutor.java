@@ -222,18 +222,20 @@ public class SpoutExecutor extends Executor {
     }
 
     public void ackSpoutMsg(Executor executor, Task taskData, Long timeDelta, TupleInfo tupleInfo) {
+        LOG.info("at ackSpoutMsg");
         try {
             ISpout spout = (ISpout) taskData.getTaskObject();
+            LOG.info("got spout in ackSpoutMsg");
             int taskId = taskData.getTaskId();
-            if (executor.getIsDebug()) {
-                LOG.info("SPOUT Acking message {} {}", tupleInfo.getId(), tupleInfo.getMessageId());
-            }
+            LOG.info("got taskId in ackSpoutMsg {}", taskId);
+            LOG.info("SPOUT Acking message in ackSpoutMsg {} {}", tupleInfo.getId(), tupleInfo.getMessageId());
             spout.ack(tupleInfo.getMessageId());
             new SpoutAckInfo(tupleInfo.getMessageId(), taskId, timeDelta).applyOn(taskData.getUserContext());
             if (timeDelta != null) {
                 ((SpoutExecutorStats) executor.getStats()).spoutAckedTuple(tupleInfo.getStream(), timeDelta);
             }
         } catch (Exception e) {
+            LOG.error("exception in ackSpoutMsg", e);
             throw Utils.wrapInRuntime(e);
         }
     }

@@ -2505,10 +2505,8 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         String topologyId = spec.get_topology_id();
         String component = spec.get_component();
         String executorId = spec.get_executor_id();
-        String metric = spec.get_metric();
+        List<String> metrics = spec.get_metrics();
         StatsStoreOperation op = spec.get_op();
-
-        System.out.println(this.metricsStore.scan());
 
         if (windows.size() == 0){
             // default to all time
@@ -2530,9 +2528,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             if (component != null) {
                 agg.filterComp(component); 
             }
-            if (metric != null) {
-                agg.filterMetric(metric); 
-            }   
 
             long startTime = 0;
             long endTime = 0;
@@ -2540,20 +2535,38 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
 
             if (window == Window.ALL){
                 // no time boundaries
-            } else if (window == Window.FIVE_MIN) {
-                agg.filterTimeStart(Time.deltaMs(5*60*1000));
+            } else if (window == Window.TEN_MIN) {
+                agg.filterTimeStart(Time.deltaMs(10*60*1000));
             } else if (window == Window.THREE_HR) {
                 agg.filterTimeStart(Time.deltaMs(3*3600*1000));
             } else if (window == Window.ONE_DAY) {
                 agg.filterTimeStart(Time.deltaMs(24*3600*1000));
             }
-            try {
-                double value = agg.sum();
-                windowedStat.set_value (value);
-                result.add_to_windowed_stats(windowedStat);
-            } catch (MetricException exp){
-                LOG.error ("Exception computing metrics", exp);
+
+            for (String metric : metrics) {
+                if (metric != null) {
+                    agg.filterMetric(metric); 
+                }   
+
+                try {
+                    double value = 0;
+                    if (op == StatsStoreOperation.SUM) {
+                        value = agg.sum();
+                    } else if (op == StatsStoreOperation.MIN) {
+                        value = agg.min();
+                    } else if (op == StatsStoreOperation.AVG) {
+                        value = agg.mean();
+                    } else if (op == StatsStoreOperation.MAX) {
+                        value = agg.max();
+                    } else {
+                        LOG.error ("I can't handle that operation {}", op);
+                    }
+                    windowedStat.put_to_values (metric, value);
+                } catch (MetricException exp){
+                    LOG.error ("Exception computing metrics", exp);
+                }
             }
+            result.add_to_windowed_stats(windowedStat);
         }
 
         return result;

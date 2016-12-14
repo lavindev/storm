@@ -39,6 +39,7 @@ import java.util.Map;
 public class ResourceAwareExampleTopology {
   public static class ExclamationBolt extends BaseRichBolt {
     OutputCollector _collector;
+    long counter = 0;
 
     @Override
     public void prepare(Map conf, TopologyContext context, OutputCollector collector) {
@@ -48,7 +49,11 @@ public class ResourceAwareExampleTopology {
     @Override
     public void execute(Tuple tuple) {
       _collector.emit(tuple, new Values(tuple.getString(0) + "!!!"));
-      _collector.ack(tuple);
+      if (counter++ % 100 == 0) {
+        _collector.fail(tuple);
+      } else {
+        _collector.ack(tuple);
+      }
     }
 
     @Override

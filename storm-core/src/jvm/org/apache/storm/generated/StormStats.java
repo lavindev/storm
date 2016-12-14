@@ -363,14 +363,14 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
           case 1: // WINDOWED_STATS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list838 = iprot.readListBegin();
-                struct.windowed_stats = new ArrayList<StormWindowedStats>(_list838.size);
-                StormWindowedStats _elem839;
-                for (int _i840 = 0; _i840 < _list838.size; ++_i840)
+                org.apache.thrift.protocol.TList _list856 = iprot.readListBegin();
+                struct.windowed_stats = new ArrayList<StormWindowedStats>(_list856.size);
+                StormWindowedStats _elem857;
+                for (int _i858 = 0; _i858 < _list856.size; ++_i858)
                 {
-                  _elem839 = new StormWindowedStats();
-                  _elem839.read(iprot);
-                  struct.windowed_stats.add(_elem839);
+                  _elem857 = new StormWindowedStats();
+                  _elem857.read(iprot);
+                  struct.windowed_stats.add(_elem857);
                 }
                 iprot.readListEnd();
               }
@@ -397,9 +397,9 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
           oprot.writeFieldBegin(WINDOWED_STATS_FIELD_DESC);
           {
             oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.windowed_stats.size()));
-            for (StormWindowedStats _iter841 : struct.windowed_stats)
+            for (StormWindowedStats _iter859 : struct.windowed_stats)
             {
-              _iter841.write(oprot);
+              _iter859.write(oprot);
             }
             oprot.writeListEnd();
           }
@@ -431,9 +431,9 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
       if (struct.is_set_windowed_stats()) {
         {
           oprot.writeI32(struct.windowed_stats.size());
-          for (StormWindowedStats _iter842 : struct.windowed_stats)
+          for (StormWindowedStats _iter860 : struct.windowed_stats)
           {
-            _iter842.write(oprot);
+            _iter860.write(oprot);
           }
         }
       }
@@ -445,14 +445,14 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
       BitSet incoming = iprot.readBitSet(1);
       if (incoming.get(0)) {
         {
-          org.apache.thrift.protocol.TList _list843 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.windowed_stats = new ArrayList<StormWindowedStats>(_list843.size);
-          StormWindowedStats _elem844;
-          for (int _i845 = 0; _i845 < _list843.size; ++_i845)
+          org.apache.thrift.protocol.TList _list861 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.windowed_stats = new ArrayList<StormWindowedStats>(_list861.size);
+          StormWindowedStats _elem862;
+          for (int _i863 = 0; _i863 < _list861.size; ++_i863)
           {
-            _elem844 = new StormWindowedStats();
-            _elem844.read(iprot);
-            struct.windowed_stats.add(_elem844);
+            _elem862 = new StormWindowedStats();
+            _elem862.read(iprot);
+            struct.windowed_stats.add(_elem862);
           }
         }
         struct.set_windowed_stats_isSet(true);

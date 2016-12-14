@@ -66,6 +66,7 @@ public class RocksDBConnector implements MetricStore {
         //Utils.getString
         boolean createIfMissing = Boolean.parseBoolean(config.get("storm.metrics2.store.rocksdb.create_if_missing").toString());
         Options options = new Options().setCreateIfMissing(createIfMissing);
+        options.useCappedPrefixExtractor(13); // epoch in ms length
 
         this.db = null;
         try {
@@ -159,12 +160,14 @@ public class RocksDBConnector implements MetricStore {
         for (iterator.seek(prefix.getBytes()); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
             LOG.info("At key: {}", key);
-            if (!key.startsWith(prefix)) {
-                break;
-            }
+           //if (!key.startsWith(prefix)) {
+           //    break;
+           //}
             Metric possibleKey = new Metric(key);
             if (checkMetric(possibleKey, settings)) {
                 result.add(String.format("%s", new String(iterator.value())));
+            } else {
+                break;
             }
         }
         return result;
@@ -217,10 +220,10 @@ public class RocksDBConnector implements MetricStore {
                 !possibleKey.getTopoId().equals(settings.get(StringKeywords.topoId))) {
             return false;
         } else if(settings.containsKey(StringKeywords.timeStart) && 
-                possibleKey.getTimeStamp() <= (Long)settings.get(StringKeywords.timeStart)) {
+                possibleKey.getTimeStamp() < (Long)settings.get(StringKeywords.timeStart)) {
             return false;
         } else if(settings.containsKey(StringKeywords.timeEnd) && 
-                possibleKey.getTimeStamp() >= (Long)settings.get(StringKeywords.timeEnd)) {
+                possibleKey.getTimeStamp() > (Long)settings.get(StringKeywords.timeEnd)) {
             return false;
         }
         return true;

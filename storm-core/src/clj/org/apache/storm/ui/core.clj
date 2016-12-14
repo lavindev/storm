@@ -40,7 +40,7 @@
             ComponentType BoltAggregateStats SpoutAggregateStats
             ExecutorAggregateStats SpecificAggregateStats ComponentPageInfo
             LogConfig LogLevel LogLevelAction SupervisorPageInfo WorkerSummary
-            StatsSpec Window])
+            StatsSpec Window StatsStoreOperation])
   (:import [org.apache.storm.security.auth AuthUtils ReqContext])
   (:import [org.apache.storm.generated AuthorizationException ProfileRequest ProfileAction NodeInfo])
   (:import [org.apache.storm.security.auth AuthUtils])
@@ -1135,51 +1135,72 @@
 
 (defn- str-window-to-thrift [str-window]
   (case str-window
-    "ALL" Window/ALL
-    "FIVE_MIN" Window/FIVE_MIN
+    "ALL_TIME" Window/ALL
+    "TEN_MIN" Window/TEN_MIN
     "THREE_HR" Window/THREE_HR
     "ONE_DAY" Window/ONE_DAY
     "default" Window/ALL))
 
+(defn- str-op-to-thrift [str-op]
+  (case str-op 
+    "SUM" StatsStoreOperation/SUM
+    "AVG" StatsStoreOperation/AVG
+    "MIN" StatsStoreOperation/MIN
+    "MAX" StatsStoreOperation/MAX
+    "default" StatsStoreOperation/SUM))
+
 (defn get-stats 
-  ([topology-id metric]
-   (get-stats topology-id metric Window/ALL))
-  ([topology-id metric window]
-   (get-stats topology-id metric window nil))
-  ([topology-id metric window component]
+  ([topology-id]
+   (let [all-windows [Window/ALL 
+                      Window/TEN_MIN
+                      Window/THREE_HR
+                      Window/ONE_DAY]
+         metrics ["emitted" "transferred" "acked" "failed"]
+         avg-metrics ["complete-latencies" "execute-latencies" "process-latencies"]]
+     {"topologyId" topology-id
+      "stats" (merge-with merge (get-stats topology-id metrics all-windows StatsStoreOperation/SUM)
+                                (get-stats topology-id avg-metrics all-windows StatsStoreOperation/AVG))}))
+  ([topology-id metrics windows op]
+   (get-stats topology-id metrics windows op nil))
+  ([topology-id metrics windows op component]
     (thrift/with-configured-nimbus-connection nimbus
       (let [stats-spec (doto (StatsSpec.) 
+                         (.set_op op)
                          (.set_topology_id topology-id)
                          (.set_component component)
-                         (.add_to_windows (str-window-to-thrift window))
-                         (.set_metric metric))
+                         (.set_windows windows)
+                         (.set_metrics metrics))
             stats (.getStats ^Nimbus$Client nimbus stats-spec)]
-        (dofor [stat (.get_windowed_stats stats)]
-         {"topologyId" (.get_topology_id stat)
-          "component" (.get_component stat)
-          "window" window
-          "executor_id" (.get_executor_id stat)
-          "value" (.get_value stat)})))))
+        (into {} 
+              (dofor [stat (.get_windowed_stats stats)]
+                {(.get_window stat) (into {} (.get_values stat))}))))))
 
 (defroutes main-routes
   (GET "/api/v1/cluster/configuration" [& m]
     (.mark ui:num-cluster-configuration-http-requests)
     (json-response (cluster-configuration)
                    (:callback m) :need-serialize false))
-  (GET "/api/v1/stats/:id/:metric/:window/:component" [:as {:keys [cookies servlet-request scheme]} id metric window component & m]
+  (GET "/api/v1/stats/:id" [:as {:keys [cookies servlet-request scheme]} id & m]
     (populate-context! servlet-request)
     (assert-authorized-user "getClusterInfo")
-    (json-response (get-stats id metric window component) (:callback m)))
+    (json-response (get-stats id) (:callback m)))
 
-  (GET "/api/v1/stats/:id/:metric/:window" [:as {:keys [cookies servlet-request scheme]} id metric window & m]
+  (GET "/api/v1/stats/:id/:metric/:window/:op/:component" [:as {:keys [cookies servlet-request scheme]} id metric window op component & m]
     (populate-context! servlet-request)
     (assert-authorized-user "getClusterInfo")
-    (json-response (get-stats id metric window) (:callback m)))
+    (json-response (get-stats id 
+                              [metric]
+                              [(str-window-to-thrift window)] 
+                              (str-op-to-thrift op) 
+                              component) (:callback m)))
 
-  (GET "/api/v1/stats/:id/:metric" [:as {:keys [cookies servlet-request scheme]} id metric & m]
+  (GET "/api/v1/stats/:id/:metric/:window/:op" [:as {:keys [cookies servlet-request scheme]} id metric window op & m]
     (populate-context! servlet-request)
     (assert-authorized-user "getClusterInfo")
-    (json-response (get-stats id metric) (:callback m)))
+    (json-response (get-stats id 
+                              [metric] 
+                              [(str-window-to-thrift window)] 
+                              (str-op-to-thrift op)) (:callback m)))
 
   (GET "/api/v1/cluster/summary" [:as {:keys [cookies servlet-request]} & m]
     (.mark ui:num-cluster-summary-http-requests)
