@@ -21,6 +21,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.SortedMap;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.codahale.metrics.ScheduledReporter;
 import com.codahale.metrics.Gauge;
@@ -58,15 +60,14 @@ public class StormPreparableReporter implements PreparableReporter {
     @Override
     public void prepare(MetricRegistry registry, Map stormConf, Map reporterConf, String daemonId) {
         try {
-            System.out.println("Configuring StormPreparableReporter for " + " " + daemonId + " " + reporterConf);
+            LOG.info("Configuring StormPreparableReporter for {}: {}", daemonId, reporterConf);
             LocalState state = ConfigUtils.workerState (stormConf, daemonId);
             this.scheduledReporter = new StormMetricScheduledReporter(registry, state, MetricFilter.ALL, TimeUnit.MILLISECONDS, TimeUnit.MILLISECONDS);
             TimeUnit unit = MetricsUtils.getMetricsSchedulePeriodUnit(reporterConf);
             long interval = MetricsUtils.getMetricsSchedulePeriod(reporterConf);
             this.scheduledReporter.start(interval, unit);
         } catch (Exception e){
-            // TODO: return false?
-            System.out.println(e);
+            LOG.error ("Exception preparing the StormPreparableReporter", e);
         }
     }
 
@@ -84,31 +85,37 @@ public class StormPreparableReporter implements PreparableReporter {
         long _reportTime = 0;
         long _prevReportTime = 0;
 
-        private Map<String, Long> counterCache;
+        private ConcurrentMap<String, Long> counterCache;
 
         public StormMetricScheduledReporter (MetricRegistry registry, LocalState state, 
                 MetricFilter filter, TimeUnit rateUnit, TimeUnit durationUnit) {
             super(registry, "storm-default-reporter", filter, rateUnit, durationUnit);
 
-            counterCache = new HashMap<String, Long>();
+            counterCache = new ConcurrentHashMap<String, Long>();
 
             // compute cache
             registry.addListener(new MetricRegistryListener() {
                 @Override
                 public void onCounterRemoved(String name){
-                    counterCache.remove(name);
+                    LOG.info("onCounterRemoved {}", name);
+                    //counterCache.remove(name);
                 }
 
                 @Override
                 public void onCounterAdded(String name, Counter counter){
-                    counterCache.put(name, new Long(0)); // always start this at 0, the report function updates
+                    //counterCache.put(name, new Long(0)); // always start this at 0, the report function updates
+                    LOG.info("onCounterAdded {}", name);
                 }
 
                 @Override
-                public void onGaugeAdded(String name, Gauge<?> gauge) {}
+                public void onGaugeAdded(String name, Gauge<?> gauge) {
+                    LOG.info("onGaugeAdded {}", name);
+                }
 
                 @Override
-                public void onGaugeRemoved(String name) {}
+                public void onGaugeRemoved(String name) {
+                    LOG.info("onGaugeRemoved {}", name);
+                }
 
                 @Override
                 public void onHistogramAdded(String name, Histogram hist) {}
@@ -156,18 +163,22 @@ public class StormPreparableReporter implements PreparableReporter {
                     String key = c.getKey();
                     long count = c.getValue().getCount();
                     // check the cache to see if the value changed
-                    long oldCount = counterCache.get(key);
+                    Long oldCount = counterCache.get(key);
+                    oldCount = oldCount == null ? 0L : oldCount;
 
                     // report the delta between the old count and the new count
                     // if count is positive, take diff
                     // oldCount is always <= count (counters are always increasing)
                     long reportCount = count > 0 ? count - oldCount : 0;
+                    LOG.info ("{}: would send {} current is {} old was {}", key, reportCount, count, oldCount);
 
                     // for the next call
                     counterCache.put(key, count);
 
                     workerStats.set_time_stamp(_reportTime);
-                    workerStats.put_to_metrics(key, new Double(reportCount));
+                  
+                    LOG.info(key); 
+                    workerStats.put_to_metrics(key, new Double(count));
                 }
             }
             if (gauges != null) {

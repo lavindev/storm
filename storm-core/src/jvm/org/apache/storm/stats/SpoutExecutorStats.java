@@ -59,18 +59,18 @@ public class SpoutExecutorStats extends CommonStats {
         return (MultiLatencyStatAndMetric) this.get(COMPLETE_LATENCIES);
     }
 
-    public void spoutAckedTuple(String stream, long latencyMs) {
+    public void spoutAckedTuple(String stream, String component, long latencyMs) {
         LOG.info("spoutAckedTuple called for {} with latency {}", stream, latencyMs);
         this.getAcked().incBy(stream, this.rate);
-        this.getCounter("common", stream, ACKED).inc(this.rate);
+        this.getCounter(component, stream, ACKED).inc(this.rate);
         this.getCompleteLatencies().record(stream, latencyMs);
-        this.getGauge("common", stream, COMPLETE_LATENCIES).update(latencyMs);
+        this.getGauge(component, stream, COMPLETE_LATENCIES).update(latencyMs);
     }
 
-    public void spoutFailedTuple(String stream, long latencyMs) {
+    public void spoutFailedTuple(String stream, String component, long latencyMs) {
         LOG.info("spoutFailedTuple called for {} with latency {}", stream, latencyMs);
         this.getFailed().incBy(stream, this.rate);
-        this.getCounter("common", stream, FAILED).inc(this.rate);
+        this.getCounter(component, stream, FAILED).inc(this.rate);
     }
 
     @Override

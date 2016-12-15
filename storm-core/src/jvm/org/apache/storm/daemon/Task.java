@@ -108,9 +108,9 @@ public class Task {
         new EmitInfo(values, stream, taskId, Collections.singletonList(outTaskId)).applyOn(userTopologyContext);
         try {
             if (emitSampler.call()) {
-                executorStats.emittedTuple(stream);
+                executorStats.emittedTuple(stream, componentId);
                 if (null != outTaskId) {
-                    executorStats.transferredTuples(stream, 1);
+                    executorStats.transferredTuples(stream, componentId, 1);
                 }
             }
         } catch (Exception e) {
@@ -144,8 +144,8 @@ public class Task {
         new EmitInfo(values, stream, taskId, outTasks).applyOn(userTopologyContext);
         try {
             if (emitSampler.call()) {
-                executorStats.emittedTuple(stream);
-                executorStats.transferredTuples(stream, outTasks.size());
+                executorStats.emittedTuple(stream, componentId);
+                executorStats.transferredTuples(stream, componentId, outTasks.size());
             }
         } catch (Exception e) {
             throw new RuntimeException(e);

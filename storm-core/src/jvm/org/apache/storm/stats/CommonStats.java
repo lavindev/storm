@@ -83,15 +83,11 @@ public abstract class CommonStats {
         StatsUtil.putKV(metricMap, field, value);
     }
 
-    public void emittedTuple(String stream) {
+    public void emittedTuple(String stream, String component) {
         this.getEmitted().incBy(stream, this.rate);
-        this.getCounter(stream, EMITTED).inc(this.rate);
+        this.getCounter(component, stream, EMITTED).inc(this.rate);
     }
    
-    private Counter getCounter(String stream, String metricName){
-        return getCounter("common", stream, metricName);
-    }
-
     protected Counter getCounter(String component, String stream, String metricName){
         String fqMeterName = this.metrics.scopedName(executorIdStr, stream, component, metricName);
         Counter result = this.metrics.getCounters().get(fqMeterName);
@@ -131,9 +127,9 @@ public abstract class CommonStats {
         return result;
     }
 
-    public void transferredTuples(String stream, int amount) {
+    public void transferredTuples(String stream, String component, int amount) {
         this.getTransferred().incBy(stream, this.rate * amount);
-        this.getCounter(stream, TRANSFERRED).inc(this.rate * amount);
+        this.getCounter(component, stream, TRANSFERRED).inc(this.rate * amount);
     }
 
     public void cleanupStats() {

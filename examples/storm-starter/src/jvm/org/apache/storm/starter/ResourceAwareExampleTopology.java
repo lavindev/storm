@@ -65,18 +65,18 @@ public class ResourceAwareExampleTopology {
   public static void main(String[] args) throws Exception {
     TopologyBuilder builder = new TopologyBuilder();
 
-    SpoutDeclarer spout =  builder.setSpout("word", new TestWordSpout(), 5);
+    SpoutDeclarer spout =  builder.setSpout("word", new TestWordSpout(), 1);
     //set cpu requirement
     spout.setCPULoad(20);
     //set onheap and offheap memory requirement
     spout.setMemoryLoad(64, 16);
 
-    BoltDeclarer bolt1 = builder.setBolt("exclaim1", new ExclamationBolt(), 3).shuffleGrouping("word");
+    BoltDeclarer bolt1 = builder.setBolt("exclaim1", new ExclamationBolt(), 1).shuffleGrouping("word");
     //sets cpu requirement.  Not neccessary to set both CPU and memory.
     //For requirements not set, a default value will be used
     bolt1.setCPULoad(15);
 
-    BoltDeclarer bolt2 = builder.setBolt("exclaim2", new ExclamationBolt(), 2).shuffleGrouping("exclaim1");
+    BoltDeclarer bolt2 = builder.setBolt("exclaim2", new ExclamationBolt(), 1).shuffleGrouping("exclaim1");
     bolt2.setMemoryLoad(100);
 
     Config conf = new Config();

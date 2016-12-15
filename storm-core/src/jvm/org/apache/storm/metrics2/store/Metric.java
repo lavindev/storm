@@ -31,7 +31,7 @@ public class Metric {
     private int port;
     private String compId;
     private Long timestamp;
-    private String value;
+    private Double value;
     private String executor;
     private String dimensions;
     private String stream;
@@ -39,18 +39,20 @@ public class Metric {
         StringKeywords.topoId, 
         StringKeywords.metricName, 
         StringKeywords.timeStart,
+    };/*
         StringKeywords.component, 
         StringKeywords.executor, 
         StringKeywords.host,
         StringKeywords.port, 
         StringKeywords.stream
     };
+    */
 
-    public String getValue() {
+    public Double getValue() {
         return value;
     }
 
-    public Metric(String metric, Long TS, String executor, String compId, String topoId, String value) {
+    public Metric(String metric, Long TS, String executor, String compId, String topoId, Double value) {
         this.metricName = metric;
         this.timestamp = TS;
         this.executor = executor;
@@ -108,12 +110,13 @@ public class Metric {
         StringBuilder x = new StringBuilder();
         for(String each : prefixOrder) {
            Object cur = settings.get(each);
-            if(cur != null){
-                x.append(cur.toString());
-                x.append("|");
-            } else {
-                break;
-            }
+           cur = cur == null ? (each == StringKeywords.timeStart ? 0 : null) : cur;
+           if(cur != null){
+               x.append(cur.toString());
+               x.append("|");
+           } else {
+               break;
+           }
         }
 
         if(x.length() == 0) {

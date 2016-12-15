@@ -47,17 +47,17 @@ public interface MetricStore {
 
     /**
      * Scans all metrics in the store
-     * @return List<String> metrics in store
+     * @return List<Double> metrics in store
      */
-    List<String> scan();
+    List<Double> scan();
 
     /**
      * Implements scan method of the Metrics Store, scans all metrics with settings in the store
      * Will try to search the fastest way possible
      * @param settings map of settings to search by
-     * @return List<String> metrics in store
+     * @return List<Double> metrics in store
      */
-    List<String> scan(HashMap<String, Object> settings);
+    List<Double> scan(HashMap<String, Object> settings);
 
     //void remove();
 

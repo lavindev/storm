@@ -232,7 +232,7 @@ public class SpoutExecutor extends Executor {
             spout.ack(tupleInfo.getMessageId());
             new SpoutAckInfo(tupleInfo.getMessageId(), taskId, timeDelta).applyOn(taskData.getUserContext());
             if (timeDelta != null) {
-                ((SpoutExecutorStats) executor.getStats()).spoutAckedTuple(tupleInfo.getStream(), timeDelta);
+                ((SpoutExecutorStats) executor.getStats()).spoutAckedTuple(tupleInfo.getStream(), componentId, timeDelta);
             }
         } catch (Exception e) {
             LOG.error("exception in ackSpoutMsg", e);
@@ -250,7 +250,7 @@ public class SpoutExecutor extends Executor {
             spout.fail(tupleInfo.getMessageId());
             new SpoutFailInfo(tupleInfo.getMessageId(), taskId, timeDelta).applyOn(taskData.getUserContext());
             if (timeDelta != null) {
-                ((SpoutExecutorStats) executor.getStats()).spoutFailedTuple(tupleInfo.getStream(), timeDelta);
+                ((SpoutExecutorStats) executor.getStats()).spoutFailedTuple(tupleInfo.getStream(), componentId, timeDelta);
             }
         } catch (Exception e) {
             throw Utils.wrapInRuntime(e);

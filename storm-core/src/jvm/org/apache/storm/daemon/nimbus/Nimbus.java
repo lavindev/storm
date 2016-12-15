@@ -2489,7 +2489,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                     String compId = keyParts[2];
                     String metricName = keyParts[3];
                 
-                    Metric m = new Metric(metricName, tstamp, execId, compId, topoId, String.valueOf(value));
+                    Metric m = new Metric(metricName, tstamp, execId, compId, topoId, value);
                     this.metricsStore.insert(m);
                 }
             }

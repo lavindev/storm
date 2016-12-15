@@ -74,19 +74,17 @@ public class Aggregation {
 
     public Double sum() throws MetricException {
         Double sum = 0.0;
-        List<String> x = this.store.scan(settings);
-        for(String each : x) {
-            //System.out.println(each);
-            sum += Double.parseDouble(each);
+        List<Double> x = this.store.scan(settings);
+        for(Double each : x) {
+            sum += each;
         }
         return sum;
     }
 
     public Double min() throws MetricException {
         Double min = Double.MAX_VALUE;
-        List<String> x = this.store.scan(settings);
-        for(String each : x) {
-            Double curr = Double.parseDouble(each);
+        List<Double> x = this.store.scan(settings);
+        for(Double curr : x) {
             if(curr < min) {
                 min = curr;
             }
@@ -96,9 +94,8 @@ public class Aggregation {
 
     public Double max() throws MetricException {
         Double max = Double.MIN_VALUE;
-        List<String> x = this.store.scan(settings);
-        for(String each : x) {
-            Double curr = Double.parseDouble(each);
+        List<Double> x = this.store.scan(settings);
+        for(Double curr : x) {
             if(curr > max) {
                 max = curr;
             }
@@ -109,9 +106,9 @@ public class Aggregation {
     public Double mean() throws MetricException {
         Double sum = 0.0;
         Integer count = 0;
-        List<String> x = this.store.scan(settings);
-        for(String each : x) {
-            sum += Double.parseDouble(each);
+        List<Double> x = this.store.scan(settings);
+        for(Double each : x) {
+            sum += each;
             count++;
         }
         return sum / count;

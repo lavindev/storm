@@ -66,7 +66,7 @@ public class RocksDBConnector implements MetricStore {
         //Utils.getString
         boolean createIfMissing = Boolean.parseBoolean(config.get("storm.metrics2.store.rocksdb.create_if_missing").toString());
         Options options = new Options().setCreateIfMissing(createIfMissing);
-        options.useCappedPrefixExtractor(13); // epoch in ms length
+        //TODO: options.useCappedPrefixExtractor(13); // epoch in ms length
 
         this.db = null;
         try {
@@ -95,7 +95,7 @@ public class RocksDBConnector implements MetricStore {
     @Override
     public void insert(Metric m) {
         try {
-            this.db.put(m.serialize().getBytes(), m.getValue().getBytes());
+            this.db.put(m.serialize().getBytes(), longToBytes(Double.doubleToLongBits(m.getValue())));
         }
         catch(RocksDBException e) {
             LOG.error("Error inserting into RocksDB", e);
@@ -107,12 +107,13 @@ public class RocksDBConnector implements MetricStore {
      * @return List<String> metrics in store
      */
     @Override
-    public List<String> scan() {
-        List<String> result = new ArrayList<String>();
+    public List<Double> scan() {
+        List<Double> result = new ArrayList<Double>();
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
-            result.add(String.format("%s", new String(iterator.key())));
+            LOG.debug ("At key: {}", key);
+            result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
         }
         return result;
     }
@@ -124,8 +125,8 @@ public class RocksDBConnector implements MetricStore {
      * @return List<String> metrics in store
      */
     @Override
-    public List<String> scan(HashMap<String, Object> settings) {
-        List<String> result = new ArrayList<String>();
+    public List<Double> scan(HashMap<String, Object> settings) {
+        List<Double> result = new ArrayList<Double>();
         //IF CAN CREATE PREFIX -- USE THAT
         //ELSE DO FULL TABLE SCAN
         String prefix = Metric.createPrefix(settings);
@@ -134,15 +135,34 @@ public class RocksDBConnector implements MetricStore {
         }
         LOG.info("Cannot obtain prefix, doing full RocksDB scan");
         RocksIterator iterator = this.db.newIterator();
+
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
-            LOG.info("At key: {}", key);
+            LOG.debug("At key: {}", key);
 
             Metric possibleKey = new Metric(key);
             if (checkMetric(possibleKey, settings)) {
-                result.add(String.format("%s", new String(iterator.value())));
+                result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
             }
 
+        }
+        return result;
+    }
+
+    public static byte[] longToBytes(long l) {
+        byte[] result = new byte[8];
+        for (int i = 7; i >= 0; i--) {
+            result[i] = (byte)(l & 0xFF);
+            l >>= 8;
+        }
+        return result;
+    }
+
+    public static long bytesToLong(byte[] b) {
+        long result = 0;
+        for (int i = 0; i < 8; i++) {
+            result <<= 8;
+            result |= (b[i] & 0xFF);
         }
         return result;
     }
@@ -153,21 +173,20 @@ public class RocksDBConnector implements MetricStore {
      * @param settings search settings
      * @return List<String> metrics in store
      */
-    private List<String> scan(String prefix, HashMap<String, Object> settings) {
+    private List<Double> scan(String prefix, HashMap<String, Object> settings) {
         LOG.info("Prefix scanning with {}", prefix);
-        List<String> result = new ArrayList<String>();
+        List<Double> result = new ArrayList<Double>();
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seek(prefix.getBytes()); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
-            LOG.info("At key: {}", key);
-           //if (!key.startsWith(prefix)) {
-           //    break;
-           //}
+            LOG.debug("At key: {}", key);
             Metric possibleKey = new Metric(key);
+
             if (checkMetric(possibleKey, settings)) {
-                result.add(String.format("%s", new String(iterator.value())));
+                result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
             } else {
-                break;
+                // skip, we may match something sliced inside of prefix
+                continue;
             }
         }
         return result;
