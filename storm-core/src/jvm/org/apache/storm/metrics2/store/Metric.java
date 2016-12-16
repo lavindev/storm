@@ -52,6 +52,10 @@ public class Metric {
         return value;
     }
 
+    public void setValue(Double value) {
+        this.value = value;
+    }
+
     public Metric(String metric, Long TS, String executor, String compId, String topoId, Double value) {
         this.metricName = metric;
         this.timestamp = TS;

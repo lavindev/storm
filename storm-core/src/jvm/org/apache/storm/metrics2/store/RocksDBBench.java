@@ -35,9 +35,9 @@ class RocksDBBench {
 
             startTime = System.currentTimeMillis();
             System.out.println("Sequential scan test");
-            long sum = conn.scanSum();
+            conn.scanAgg((metric) -> System.out.println(metric));
             time = System.currentTimeMillis() - startTime;
-            System.out.println("SUM: " + sum + " in " + time + " ms");
+            //System.out.println("SUM: " + sum + " in " + time + " ms");
         }
     }
 }

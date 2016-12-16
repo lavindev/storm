@@ -96,8 +96,7 @@ public class RocksDBConnector implements MetricStore {
     public void insert(Metric m) {
         try {
             this.db.put(m.serialize().getBytes(), longToBytes(Double.doubleToLongBits(m.getValue())));
-        }
-        catch(RocksDBException e) {
+        } catch (RocksDBException e) {
             LOG.error("Error inserting into RocksDB", e);
         }
     }
@@ -108,18 +107,15 @@ public class RocksDBConnector implements MetricStore {
      */
 
     @Override
-    public List<Double> scan (){return null;}
-
-    public long scanSum() {
+    public void scanAgg(IAggregator agg) {
         //List<Double> result = new ArrayList<Double>();
         long test = 0L;
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
-            // this is wrong
-            test = test + bytesToLong(iterator.value());
-            //result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
+            Metric metric = new Metric(iterator.key());
+            metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
+            agg.agg(metric);
         }
-        return test;
     }
 
     /**
@@ -129,13 +125,13 @@ public class RocksDBConnector implements MetricStore {
      * @return List<String> metrics in store
      */
     @Override
-    public List<Double> scan(HashMap<String, Object> settings) {
-        List<Double> result = new ArrayList<Double>();
+    public void scan(HashMap<String, Object> settings, IAggregator agg);
         //IF CAN CREATE PREFIX -- USE THAT
         //ELSE DO FULL TABLE SCAN
         String prefix = Metric.createPrefix(settings);
         if (prefix != null) {
-            return scan(prefix, settings);
+            scan(prefix, settings, agg);
+            return;
         }
         LOG.info("Cannot obtain prefix, doing full RocksDB scan");
         RocksIterator iterator = this.db.newIterator();
@@ -144,13 +140,13 @@ public class RocksDBConnector implements MetricStore {
             String key = new String(iterator.key());
             LOG.debug("At key: {}", key);
 
-            Metric possibleKey = new Metric(key);
-            if (checkMetric(possibleKey, settings)) {
-                result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
+            Metric metric = new Metric(key);
+            agg.consume(iterator.value());
+            if (checkMetric(metric, settings)) {
+                metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
+                agg.agg(metric);
             }
-
         }
-        return result;
     }
 
     public static byte[] longToBytes(long l) {
@@ -177,23 +173,22 @@ public class RocksDBConnector implements MetricStore {
      * @param settings search settings
      * @return List<String> metrics in store
      */
-    private List<Double> scan(String prefix, HashMap<String, Object> settings) {
+    private void scan(String prefix, HashMap<String, Object> settings, IAggregator agg) {
         LOG.info("Prefix scanning with {}", prefix);
-        List<Double> result = new ArrayList<Double>();
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seek(prefix.getBytes()); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
             LOG.debug("At key: {}", key);
-            Metric possibleKey = new Metric(key);
+            Metric metric = new Metric(key);
 
-            if (checkMetric(possibleKey, settings)) {
-                result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
+            if (checkMetric(metric, settings)) {
+                metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
+                agg.agg(metric);
             } else {
                 // skip, we may match something sliced inside of prefix
                 continue;
             }
         }
-        return result;
     }
 
     /**

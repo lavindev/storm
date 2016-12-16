@@ -49,7 +49,9 @@ public interface MetricStore {
      * Scans all metrics in the store
      * @return List<Double> metrics in store
      */
-    List<Double> scan();
+    void scan();
+
+    void scanAgg(IAggregator agg);
 
     /**
      * Implements scan method of the Metrics Store, scans all metrics with settings in the store
@@ -57,7 +59,7 @@ public interface MetricStore {
      * @param settings map of settings to search by
      * @return List<Double> metrics in store
      */
-    List<Double> scan(HashMap<String, Object> settings);
+    void scan(HashMap<String, Object> settings, IAggregator agg);
 
     //void remove();
 
