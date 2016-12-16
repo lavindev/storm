@@ -106,16 +106,20 @@ public class RocksDBConnector implements MetricStore {
      * Implements scan method of the Metrics Store, scans all metrics in the store
      * @return List<String> metrics in store
      */
+
     @Override
-    public List<Double> scan() {
-        List<Double> result = new ArrayList<Double>();
+    public List<Double> scan (){return null;}
+
+    public long scanSum() {
+        //List<Double> result = new ArrayList<Double>();
+        long test = 0L;
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
-            String key = new String(iterator.key());
-            LOG.debug ("At key: {}", key);
-            result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
+            // this is wrong
+            test = test + bytesToLong(iterator.value());
+            //result.add(Double.longBitsToDouble(bytesToLong(iterator.value())));
         }
-        return result;
+        return test;
     }
 
     /**
