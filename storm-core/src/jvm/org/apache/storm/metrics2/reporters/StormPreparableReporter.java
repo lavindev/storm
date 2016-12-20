@@ -170,15 +170,14 @@ public class StormPreparableReporter implements PreparableReporter {
                     // if count is positive, take diff
                     // oldCount is always <= count (counters are always increasing)
                     long reportCount = count > 0 ? count - oldCount : 0;
-                    LOG.info ("{}: would send {} current is {} old was {}", key, reportCount, count, oldCount);
+                    LOG.info ("{}: would send {} current is {} old was {}", 
+                            key, reportCount, count, oldCount);
 
                     // for the next call
                     counterCache.put(key, count);
 
                     workerStats.set_time_stamp(_reportTime);
-                  
-                    LOG.info(key); 
-                    workerStats.put_to_metrics(key, new Double(count));
+                    workerStats.put_to_metrics(key, new Double(reportCount));
                 }
             }
             if (gauges != null) {
@@ -213,9 +212,9 @@ public class StormPreparableReporter implements PreparableReporter {
                     //workerStats.put_to_metrics(key + "--pct98" , new Double(pct98));
                     //workerStats.put_to_metrics(key + "--pct99" , new Double(pct99));
                     //workerStats.put_to_metrics(key + "--pct999", new Double(pct999));
-                    workerStats.put_to_metrics(key + "--max"   , new Double(max));
-                    workerStats.put_to_metrics(key + "--min"   , new Double(min));
-                    workerStats.put_to_metrics(key + "--means" , new Double(means));
+                    //workerStats.put_to_metrics(key + "--max"   , new Double(max));
+                    //workerStats.put_to_metrics(key + "--min"   , new Double(min));
+                    //workerStats.put_to_metrics(key + "--means" , new Double(means));
                    // workerStats.put_to_metrics(key + "--median", new Double(median));
                    // workerStats.put_to_metrics(key + "--stddev", new Double(stddev));
                    //for (int i = 0; i < vals.length; i++){
@@ -245,24 +244,24 @@ public class StormPreparableReporter implements PreparableReporter {
                     double stddev = snap.getStdDev();
                     long[] vals   = snap.getValues();
 
-                    workerStats.put_to_metrics(key + "--count" , new Double(count));
-                    workerStats.put_to_metrics(key + "--rate15", new Double(rate15));
-                    workerStats.put_to_metrics(key + "--rate5" , new Double(rate5));
-                    workerStats.put_to_metrics(key + "--rate1" , new Double(rate1));
-                    workerStats.put_to_metrics(key + "--mean"  , new Double(mean));
-                    workerStats.put_to_metrics(key + "--pct75" , new Double(pct75));
-                    workerStats.put_to_metrics(key + "--pct95" , new Double(pct95));
-                    workerStats.put_to_metrics(key + "--pct98" , new Double(pct98));
-                    workerStats.put_to_metrics(key + "--pct99" , new Double(pct99));
-                    workerStats.put_to_metrics(key + "--pct999", new Double(pct999));
-                    workerStats.put_to_metrics(key + "--max"   , new Double(max));
-                    workerStats.put_to_metrics(key + "--min"   , new Double(min));
-                    workerStats.put_to_metrics(key + "--means" , new Double(means));
-                    workerStats.put_to_metrics(key + "--median", new Double(median));
-                    workerStats.put_to_metrics(key + "--stddev", new Double(stddev));
-                    for (int i = 0; i < vals.length; i++){
-                        workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
-                    }
+                    //workerStats.put_to_metrics(key + "--count" , new Double(count));
+                    //workerStats.put_to_metrics(key + "--rate15", new Double(rate15));
+                    //workerStats.put_to_metrics(key + "--rate5" , new Double(rate5));
+                    //workerStats.put_to_metrics(key + "--rate1" , new Double(rate1));
+                    //workerStats.put_to_metrics(key + "--mean"  , new Double(mean));
+                    //workerStats.put_to_metrics(key + "--pct75" , new Double(pct75));
+                    //workerStats.put_to_metrics(key + "--pct95" , new Double(pct95));
+                    //workerStats.put_to_metrics(key + "--pct98" , new Double(pct98));
+                    //workerStats.put_to_metrics(key + "--pct99" , new Double(pct99));
+                    //workerStats.put_to_metrics(key + "--pct999", new Double(pct999));
+                    //workerStats.put_to_metrics(key + "--max"   , new Double(max));
+                    //workerStats.put_to_metrics(key + "--min"   , new Double(min));
+                    //workerStats.put_to_metrics(key + "--means" , new Double(means));
+                    //workerStats.put_to_metrics(key + "--median", new Double(median));
+                    //workerStats.put_to_metrics(key + "--stddev", new Double(stddev));
+                    //for (int i = 0; i < vals.length; i++){
+                    //    workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
+                    //}
                 }
             }
             state.setWorkerStats(workerStats);

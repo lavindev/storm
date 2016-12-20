@@ -1151,10 +1151,7 @@
 
 (defn get-stats 
   ([topology-id]
-   (let [all-windows [Window/ALL 
-                      Window/TEN_MIN
-                      Window/THREE_HR
-                      Window/ONE_DAY]
+   (let [all-windows [Window/ALL]
          metrics ["emitted" "transferred" "acked" "failed"]
          avg-metrics ["complete-latencies" "execute-latencies" "process-latencies"]]
      {"topologyId" topology-id
@@ -1172,8 +1169,8 @@
                          (.set_metrics metrics))
             stats (.getStats ^Nimbus$Client nimbus stats-spec)]
         (into {} 
-              (dofor [stat (.get_windowed_stats stats)]
-                {(.get_window stat) (into {} (.get_values stat))}))))))
+          (dofor [stat (.get_windowed_stats stats)]
+            {(.get_window stat) (into {} (.get_values stat))}))))))
 
 (defroutes main-routes
   (GET "/api/v1/cluster/configuration" [& m]

@@ -22,6 +22,8 @@ import java.lang.String;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Map;
 import java.io.File;
 import org.slf4j.Logger;
@@ -31,6 +33,8 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.TableFormatConfig;
 
 /**
  * This class implements the Storm Metrics Store Interface using RocksDB as a store
@@ -66,6 +70,32 @@ public class RocksDBConnector implements MetricStore {
         //Utils.getString
         boolean createIfMissing = Boolean.parseBoolean(config.get("storm.metrics2.store.rocksdb.create_if_missing").toString());
         Options options = new Options().setCreateIfMissing(createIfMissing);
+
+        if (config.containsKey("storm.metrics2.store.rocksdb.total_threads")) {
+            options.setIncreaseParallelism((int)config.get("storm.metrics2.store.rocksdb.total_threads"));
+        }
+
+        if (config.containsKey("storm.metrics2.store.rocksdb.optimize_filters_for_hits")) {
+            options.setOptimizeFiltersForHits((boolean)config.get("storm.metrics2.store.rocksdb.optimize_filters_for_hits"));
+        }
+
+        if (config.containsKey("storm.metrics2.store.rocksdb.optimize_level_style_compaction")) {
+            if ((boolean)config.get("storm.metrics2.store.rocksdb.optimize_level_style_compaction")) {
+                if (config.containsKey("storm.metrics2.store.rocksdb.optimize_level_style_compaction_memtable_memory_budget_mb")) {
+                    Integer budget_mb = (Integer)config.get("storm.metrics2.store.rocksdb.optimize_level_style_compaction_memtable_memory_budget_mb");
+                    options.optimizeLevelStyleCompaction(budget_mb * 1024L * 1024L);
+                } else {
+                    options.optimizeLevelStyleCompaction();
+                }
+            }
+        }
+
+        // table format config
+        BlockBasedTableConfig tfc = new BlockBasedTableConfig();
+        //tfc.setBlockCacheSize((long)16*1024*1024);
+        tfc.setBlockSize((long)16*1024);
+        options.setTableFormatConfig(tfc);
+
         //TODO: options.useCappedPrefixExtractor(13); // epoch in ms length
 
         this.db = null;
@@ -78,14 +108,17 @@ public class RocksDBConnector implements MetricStore {
             LOG.error("Error opening RockDB database", e);
         }
 
+        LOG.info ("RocksDB Stats: {}", getStats());
+    }
+
+    public String getStats() {
+        String stats = null;
         try {
-            Long estimatedNumKeys = Long.parseLong(this.db.getProperty("rocksdb.estimate-num-keys"));
-            String stats = this.db.getProperty("rocksdb.stats");
-            LOG.info ("RocksDB has an estimate of {} entries. Stats: {}", estimatedNumKeys, stats);
-        } catch (RocksDBException e) {
+            stats = this.db.getProperty("rocksdb.stats");
+        } catch (RocksDBException e){
             LOG.error("Error getting RockDB database stats", e);
         }
-
+        return stats;
     }
 
     /**
@@ -107,14 +140,14 @@ public class RocksDBConnector implements MetricStore {
      */
 
     @Override
-    public void scanAgg(IAggregator agg) {
+    public void scan(IAggregator agg) {
         //List<Double> result = new ArrayList<Double>();
         long test = 0L;
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
-            Metric metric = new Metric(iterator.key());
+            Metric metric = new Metric(new String(iterator.key()));
             metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
-            agg.agg(metric);
+            agg.agg(metric, null);
         }
     }
 
@@ -125,7 +158,7 @@ public class RocksDBConnector implements MetricStore {
      * @return List<String> metrics in store
      */
     @Override
-    public void scan(HashMap<String, Object> settings, IAggregator agg);
+    public void scan(HashMap<String, Object> settings, IAggregator agg){
         //IF CAN CREATE PREFIX -- USE THAT
         //ELSE DO FULL TABLE SCAN
         String prefix = Metric.createPrefix(settings);
@@ -141,12 +174,24 @@ public class RocksDBConnector implements MetricStore {
             LOG.debug("At key: {}", key);
 
             Metric metric = new Metric(key);
-            agg.consume(iterator.value());
-            if (checkMetric(metric, settings)) {
+            Set<TimeRange> timeRanges = checkMetric(metric, settings);
+            if (timeRanges != null) {
                 metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
-                agg.agg(metric);
+                agg.agg(metric, timeRanges);
             }
         }
+    }
+
+    @Override
+    public void remove(HashMap<String, Object> settings) {
+        // for each key we match, remove it
+        scan(settings, (metric, timeRanges) -> {
+            try {
+                this.db.remove(metric.getKey().getBytes());
+            } catch (RocksDBException e) {
+                LOG.error("Error removing from RocksDB", e);
+            }
+        });
     }
 
     public static byte[] longToBytes(long l) {
@@ -181,9 +226,10 @@ public class RocksDBConnector implements MetricStore {
             LOG.debug("At key: {}", key);
             Metric metric = new Metric(key);
 
-            if (checkMetric(metric, settings)) {
+            Set<TimeRange> timeRanges = checkMetric(metric, settings);
+            if (timeRanges != null){ 
                 metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
-                agg.agg(metric);
+                agg.agg(metric, timeRanges);
             } else {
                 // skip, we may match something sliced inside of prefix
                 continue;
@@ -198,10 +244,6 @@ public class RocksDBConnector implements MetricStore {
      * the config specifies not to create the store
      */
     private void validateConfig(Map config) throws MetricException {
-        if (config.get("storm.metrics2.store.connector_class") != "org.apache.storm.metrics2.store.RocksDBConnector") {
-            throw new MetricException("Not a configuration for the RockDB Connector");
-        }
-
         if (!(config.containsKey("storm.metrics2.store.rocksdb.location"))) {
             throw new MetricException("Not a vaild RocksDB configuration - Missing store location");
         }
@@ -227,24 +269,28 @@ public class RocksDBConnector implements MetricStore {
      * @throws MetricException if there is a missing required configuration or if the store does not exist but
      * the config specifies not to create the store
      */
-    private boolean checkMetric(Metric possibleKey, HashMap<String, Object> settings)  {
+    private Set<TimeRange> checkMetric(Metric possibleKey, HashMap<String, Object> settings)  {
         if(settings.containsKey(StringKeywords.component) && 
                 !possibleKey.getCompId().equals(settings.get(StringKeywords.component))) {
-            return false;
+            return null;
         } else if(settings.containsKey(StringKeywords.metricName) && 
                 !possibleKey.getMetricName().equals(settings.get(StringKeywords.metricName))) {
-            return false;
+            return null;
         } else if(settings.containsKey(StringKeywords.topoId) && 
                 !possibleKey.getTopoId().equals(settings.get(StringKeywords.topoId))) {
-            return false;
-        } else if(settings.containsKey(StringKeywords.timeStart) && 
-                possibleKey.getTimeStamp() < (Long)settings.get(StringKeywords.timeStart)) {
-            return false;
-        } else if(settings.containsKey(StringKeywords.timeEnd) && 
-                possibleKey.getTimeStamp() > (Long)settings.get(StringKeywords.timeEnd)) {
-            return false;
+            return null;
+        } else if(settings.containsKey(StringKeywords.timeRangeSet)){ 
+            Set<TimeRange> timeRangeSet = (Set<TimeRange>)settings.get(StringKeywords.timeRangeSet);
+            Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
+            for (TimeRange tr : timeRangeSet){
+                Long tstamp = possibleKey.getTimeStamp();
+                if (tr.contains(tstamp)){
+                    matchedTimeRanges.add(tr);
+                }
+            }
+            return matchedTimeRanges.size() > 0 ? matchedTimeRanges : null;
         }
-        return true;
+        return new HashSet<TimeRange>();
     }
 
     public void remove() {

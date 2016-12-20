@@ -24,6 +24,8 @@ public class StringKeywords
     public final static String topoId = "topoId";
     public final static String timeStart = "timeStart";
     public final static String timeEnd = "timeEnd";
+    public final static String timeRangeSet = "timeRangeSet";
+    public final static String metricSet = "metricSet";
     public final static String component = "component";
     public final static String executor = "executor";
     public final static String host = "host";

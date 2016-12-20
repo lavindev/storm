@@ -20,6 +20,7 @@ package org.apache.storm.metrics2.store;
 
 import java.util.List;
 import java.util.HashMap;
+import java.util.HashSet;
 
 public class Aggregation {
 
@@ -38,7 +39,12 @@ public class Aggregation {
     // Todo: Filter for different instances of the same field, two hosts for example
 
     public void filterMetric(String metric) {
-        this.settings.put(StringKeywords.metricName, metric);
+        HashSet<String> metricSet = (HashSet<String>)this.settings.get(StringKeywords.metricSet);
+        if (metricSet == null){
+            metricSet = new HashSet<String>();
+            this.settings.put(StringKeywords.metricSet, metricSet);
+        }
+        metricSet.add(metric);
     }
 
     public void filterTopo(String topoId) {
@@ -57,61 +63,73 @@ public class Aggregation {
         this.settings.put(StringKeywords.component, comp);
     }
 
-    public void filterTimeStart(Long time) { 
-        this.settings.put(StringKeywords.timeStart, time);
-    }
-
-    public void filterTimeEnd(Long time) { 
-        this.settings.put(StringKeywords.timeEnd, time);
-    }
-
     public void filterTime(Long timeStart, Long timeEnd) {
-        this.settings.put(StringKeywords.timeStart, timeStart);
-        this.settings.put(StringKeywords.timeEnd, timeEnd);
+        HashSet<TimeRange> timeRangeSet = (HashSet<TimeRange>)this.settings.get(StringKeywords.timeRangeSet);
+        if (timeRangeSet == null){
+            timeRangeSet = new HashSet<TimeRange>();
+            this.settings.put(StringKeywords.timeRangeSet, timeRangeSet);
+        }
+        TimeRange timeRange = new TimeRange(timeStart, timeEnd);
+        timeRangeSet.add(timeRange);
     }
 
     // Aggregations
 
-    public Double sum() throws MetricException {
-        Double sum = 0.0;
-        List<Double> x = this.store.scan(settings);
-        for(Double each : x) {
-            sum += each;
-        }
-        return sum;
+    public MetricResult sum() throws MetricException {
+        MetricResult result = new MetricResult();
+        this.store.scan(settings, (metric, timeRanges) -> {
+            for (TimeRange tr : timeRanges){
+                Double value = result.getValueFor(tr);
+                value = value == null ? 0.0 : value;
+                result.setValueFor(tr, value + metric.getValue());
+                result.incCountFor(tr);
+            }
+        });
+        return result;
     }
 
-    public Double min() throws MetricException {
-        Double min = Double.MAX_VALUE;
-        List<Double> x = this.store.scan(settings);
-        for(Double curr : x) {
-            if(curr < min) {
-                min = curr;
+    public MetricResult min() throws MetricException {
+        MetricResult result = new MetricResult();
+        this.store.scan(settings, (metric, timeRanges) -> {
+            for (TimeRange tr : timeRanges) {
+                Double value = metric.getValue();
+                value = value == null ? 0.0 : value;
+                result.setValueFor(tr, Math.min(value, result.getValueFor(tr)));
+                result.incCountFor(tr);
+            }
+        });
+        return result;
+    }
+
+    public MetricResult max() throws MetricException {
+        MetricResult result = new MetricResult();
+        this.store.scan(settings, (metric, timeRanges) -> {
+            for (TimeRange tr : timeRanges) {
+                Double value = metric.getValue();
+                result.setValueFor(tr, Math.max(value, result.getValueFor(tr)));
+                result.incCountFor(tr);
+            }
+        });
+        return result;
+    }
+
+    public MetricResult mean() throws MetricException {
+        MetricResult result = new MetricResult();
+        this.store.scan(settings, (metric, timeRanges) -> {
+            for (TimeRange tr : timeRanges) {
+                Double value = metric.getValue();
+                value = value == null ? 0.0 : value;
+                Double prev = result.getValueFor(tr);
+                prev = prev == null ? 0.0 : prev;
+                result.setValueFor(tr, value + prev);
+                result.incCountFor(tr);
+            }
+        });
+        for (TimeRange tr : result.getTimeRanges()){
+            if (result.getCountFor(tr) > 0) {
+                result.setValueFor(tr, result.getValueFor(tr) / result.getCountFor(tr));
             }
         }
-        return min;
+        return result;
     }
-
-    public Double max() throws MetricException {
-        Double max = Double.MIN_VALUE;
-        List<Double> x = this.store.scan(settings);
-        for(Double curr : x) {
-            if(curr > max) {
-                max = curr;
-            }
-        }
-        return max;
-    }
-
-    public Double mean() throws MetricException {
-        Double sum = 0.0;
-        Integer count = 0;
-        List<Double> x = this.store.scan(settings);
-        for(Double each : x) {
-            sum += each;
-            count++;
-        }
-        return sum / count;
-    }
-
 }

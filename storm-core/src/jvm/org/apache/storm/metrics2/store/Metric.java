@@ -22,6 +22,7 @@ import java.lang.String;
 import java.lang.StringBuilder;
 import java.util.Map;
 import java.util.List;
+import java.util.Set;
 
 public class Metric {
 
@@ -35,10 +36,11 @@ public class Metric {
     private String executor;
     private String dimensions;
     private String stream;
+    private String key;
     private static String[] prefixOrder = {
-        StringKeywords.topoId, 
-        StringKeywords.metricName, 
         StringKeywords.timeStart,
+        StringKeywords.topoId, 
+        StringKeywords.metricName
     };/*
         StringKeywords.component, 
         StringKeywords.executor, 
@@ -52,20 +54,31 @@ public class Metric {
         return value;
     }
 
+    public String getKey() {
+        if (key == null) {
+            key = serialize();
+        }
+        return key;
+    }
+
     public void setValue(Double value) {
         this.value = value;
     }
 
-    public Metric(String metric, Long TS, String executor, String compId, String topoId, Double value) {
+    public Metric(String metric, Long TS, String executor, String compId, 
+                  String stream, String topoId, Double value) {
         this.metricName = metric;
         this.timestamp = TS;
         this.executor = executor;
         this.compId = compId;
         this.topoId = topoId;
+        this.stream = stream;
         this.value = value;
+        this.key = null;
     }
 
     public Metric(String str) {
+        this.key = str;
         deserialize(str);
     }
 
@@ -79,11 +92,11 @@ public class Metric {
 
     public String serialize() {
         StringBuilder x = new StringBuilder();
+        x.append(this.timestamp);
+        x.append("|");
         x.append(this.topoId);
         x.append("|");
         x.append(this.metricName);
-        x.append("|");
-        x.append(this.timestamp);
         x.append("|");
         x.append(this.compId);
         x.append("|");
@@ -100,9 +113,9 @@ public class Metric {
 
     public void deserialize(String str) {
         String[] elements = str.split("\\|");
-        this.topoId = elements[0];
-        this.metricName = elements[1];
-        this.timestamp = Long.parseLong(elements[2]);
+        this.timestamp = Long.parseLong(elements[0]);
+        this.topoId = elements[1];
+        this.metricName = elements[2];
         this.compId = elements[3];
         this.executor = elements[4];
         this.host = elements[5];
@@ -110,18 +123,39 @@ public class Metric {
         this.stream = elements[7];
     }
 
+    public String toString() {
+        return serialize() + " => " + this.value;
+    }
+
     public static String createPrefix(Map<String, Object> settings){
         StringBuilder x = new StringBuilder();
         for(String each : prefixOrder) {
-           Object cur = settings.get(each);
-           cur = cur == null ? (each == StringKeywords.timeStart ? 0 : null) : cur;
-           if(cur != null){
-               x.append(cur.toString());
-               x.append("|");
-           } else {
-               break;
-           }
-        }
+            Object cur = null;
+
+            if (each == StringKeywords.timeStart){
+                // find minimium time beteween all time ranges
+                // this would be better organized as an ordered set
+                Set<TimeRange> timeRangeSet = (Set<TimeRange>)settings.get(StringKeywords.timeRangeSet);
+                if (timeRangeSet != null){
+                    Long minTime = null;
+                    for (TimeRange tr : timeRangeSet){
+                        if (minTime == null || tr.startTime < minTime){
+                            minTime = tr.startTime;
+                        }
+                    }
+                    cur = minTime;
+                }
+            } else {
+                cur = settings.get(each);
+            }
+
+            if(cur != null){
+                x.append(cur.toString());
+                x.append("|");
+            } else {
+                break;
+            }
+        }   
 
         if(x.length() == 0) {
             return null;
