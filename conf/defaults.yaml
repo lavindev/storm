@@ -290,8 +290,10 @@ storm.daemon.metrics.reporter.plugins:
 
 storm.metrics2.store.connector_class: "org.apache.storm.metrics2.store.RocksDBConnector"
 storm.metrics2.store.rocksdb.create_if_missing: true
+storm.metrics2.store.rocksdb.table_type: "block" 
 storm.metrics2.store.rocksdb.location: "/tmp/storm_rocks"
 storm.metrics2.store.rocksdb.retention: 1
+storm.metrics2.store.rocksdb.retention.units: "MINUTES"
 storm.metrics2.store.rocksdb.retention.units: "MINUTES"
 
 storm.metrics.reporters:

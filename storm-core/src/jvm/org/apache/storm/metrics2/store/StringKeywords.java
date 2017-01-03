@@ -20,6 +20,7 @@ package org.apache.storm.metrics2.store;
 
 public class StringKeywords
 {
+    public final static String aggLevel = "aggLevel";
     public final static String metricName = "metricName";
     public final static String topoId = "topoId";
     public final static String timeStart = "timeStart";

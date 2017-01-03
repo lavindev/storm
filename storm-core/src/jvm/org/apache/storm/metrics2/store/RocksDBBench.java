@@ -15,8 +15,9 @@ class RocksDBBench {
         HashMap<String, Object> conf = new HashMap<>();
         conf.put("storm.metrics2.store.rocksdb.create_if_missing", true);
         conf.put("storm.metrics2.store.rocksdb.location", "/tmp/rocks_bench");
-        conf.put("storm.metrics2.store.rocksdb.optimize_filters_for_hits", false);
+        //conf.put("storm.metrics2.store.rocksdb.optimize_filters_for_hits", false);
         conf.put("storm.metrics2.store.rocksdb.optimize_level_style_compaction", true);
+        conf.put("storm.metrics2.store.rocksdb.table_type", "block");
         //conf.put("storm.metrics2.store.rocksdb.optimize_level_style_compaction_memtable_memory_budget_mb", 256);
 
         //conf.put("storm.metrics2.store.rocksdb.total_threads", 4);
@@ -26,6 +27,7 @@ class RocksDBBench {
 
         int numMetricsPerExecutor = 10;
         int numExecutors = 20;
+        int numDays = 1;
 
         System.out.println ("Insert test");
         long startTime = System.currentTimeMillis();
@@ -34,8 +36,9 @@ class RocksDBBench {
             for (int num = 0; num < numMetricsPerExecutor; num++){
                 String metric = "metric" + num;
                 
-                int samplesADay = 6*60*24;
-                for (long j = 0; j < samplesADay; j++){
+                int samplesADay = 1*60*24;
+                int numSamples = samplesADay * numDays;
+                for (long j = 0; j < numSamples; j++){
                     Metric m = new Metric(metric, j, Integer.toString(e), "comp1", "default", topo, value);
                     conn.insert(m);
                     value++;
@@ -47,12 +50,19 @@ class RocksDBBench {
         System.out.println("Wrote " + value + " rows in " + time + " ms");
         System.out.println(conn.getStats());
 
-        startTime = System.currentTimeMillis();
-        System.out.println("Full scan test");
-        conn.scan((metric, timeRanges) -> bench.sum += metric.getValue());
-        time = System.currentTimeMillis() - startTime;
-        System.out.println("SUM: " + bench.sum + " in " + time + " ms");
-        System.out.println(conn.getStats());
+        long runningSum = 0;
+        int numIter = 5;
+        for (int i = 0; i < numIter; i++){
+            startTime = System.currentTimeMillis();
+            System.out.println("Full scan test " + i);
+            conn.scan((metric, timeRanges) -> bench.sum += metric.getValue());
+            time = System.currentTimeMillis() - startTime;
+            System.out.println("SUM: " + bench.sum + " in " + time + " ms");
+            System.out.println(conn.getStats());
+            runningSum += time;
+        }
+
+        System.out.println ("AVG: " + runningSum/numIter);
 
         startTime = System.currentTimeMillis();
         System.out.println("Full remove test");

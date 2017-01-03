@@ -59,6 +59,9 @@ public interface MetricStore {
      */
     void scan(HashMap<String, Object> settings, IAggregator agg);
 
+    // get by matching a key exactly
+    boolean populateValue(Metric metric);
+
     // remove things matching settings, kind of like a scan but much scarier
     void remove(HashMap<String, Object> settings);
 }

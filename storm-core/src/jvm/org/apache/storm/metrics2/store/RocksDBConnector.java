@@ -34,7 +34,10 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.PlainTableConfig;
 import org.rocksdb.TableFormatConfig;
+import org.rocksdb.IndexType;
+import org.rocksdb.CompactionStyle;
 
 /**
  * This class implements the Storm Metrics Store Interface using RocksDB as a store
@@ -91,12 +94,42 @@ public class RocksDBConnector implements MetricStore {
         }
 
         // table format config
-        BlockBasedTableConfig tfc = new BlockBasedTableConfig();
-        //tfc.setBlockCacheSize((long)16*1024*1024);
-        tfc.setBlockSize((long)16*1024);
-        options.setTableFormatConfig(tfc);
+        String tableType = "plain";
+        if (config.containsKey("storm.metrics2.store.rocksdb.table_type")){
+            tableType = (String)config.get("storm.metrics2.store.rocksdb.table_type");
+        }
 
-        //TODO: options.useCappedPrefixExtractor(13); // epoch in ms length
+        if (true || tableType.equals("block")) {
+            LOG.info("Instantiating RocksDB BlockBasedTable");
+            BlockBasedTableConfig tfc = new BlockBasedTableConfig();
+            //tfc.setBlockCacheSize((long)16*1024*1024);
+            tfc.setIndexType(IndexType.kHashSearch);
+            tfc.setBlockSize((long)4*1024);
+            options.useCappedPrefixExtractor(34); // epoch in ms length
+            options.setMemtablePrefixBloomSizeRatio(10);
+            options.setBloomLocality(1);
+            options.setMaxOpenFiles(-1);
+            options.setTableFormatConfig(tfc);
+            options.setWriteBufferSize(32 << 20);
+            options.setMaxWriteBufferNumber(2);
+            options.setMinWriteBufferNumberToMerge(1);
+            options.setVerifyChecksumsInCompaction(false);
+            options.setDisableDataSync(true);
+            options.setBytesPerSync(2 << 20);
+
+            options.setCompactionStyle(CompactionStyle.UNIVERSAL);
+            options.setLevelZeroFileNumCompactionTrigger(1);
+            options.setLevelZeroSlowdownWritesTrigger(8);
+            options.setLevelZeroStopWritesTrigger(16);
+        } else {
+            LOG.info("Instantiating RocksDB PlainTable");
+            PlainTableConfig tfc = new PlainTableConfig();
+            tfc.setFullScanMode(true);
+            tfc.setStoreIndexInFile(true);
+            options.setTableFormatConfig(tfc);
+        }
+
+
 
         this.db = null;
         try {
@@ -128,7 +161,11 @@ public class RocksDBConnector implements MetricStore {
     @Override
     public void insert(Metric m) {
         try {
-            this.db.put(m.serialize().getBytes(), longToBytes(Double.doubleToLongBits(m.getValue())));
+            LOG.debug("inserting {}", m.toString());
+            byte[] key = m.getKeyBytes();
+            byte[] value = m.getValueBytes();
+
+            this.db.put(key, value);
         } catch (RocksDBException e) {
             LOG.error("Error inserting into RocksDB", e);
         }
@@ -141,12 +178,11 @@ public class RocksDBConnector implements MetricStore {
 
     @Override
     public void scan(IAggregator agg) {
-        //List<Double> result = new ArrayList<Double>();
         long test = 0L;
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
             Metric metric = new Metric(new String(iterator.key()));
-            metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
+            metric.setValueFromBytes(iterator.value());
             agg.agg(metric, null);
         }
     }
@@ -161,7 +197,7 @@ public class RocksDBConnector implements MetricStore {
     public void scan(HashMap<String, Object> settings, IAggregator agg){
         //IF CAN CREATE PREFIX -- USE THAT
         //ELSE DO FULL TABLE SCAN
-        String prefix = Metric.createPrefix(settings);
+        byte[] prefix = Metric.createPrefix(settings);
         if (prefix != null) {
             scan(prefix, settings, agg);
             return;
@@ -171,12 +207,12 @@ public class RocksDBConnector implements MetricStore {
 
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
-            LOG.debug("At key: {}", key);
+            LOG.info("At key: {}", key);
 
             Metric metric = new Metric(key);
             Set<TimeRange> timeRanges = checkMetric(metric, settings);
             if (timeRanges != null) {
-                metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
+                metric.setValueFromBytes(iterator.value());
                 agg.agg(metric, timeRanges);
             }
         }
@@ -194,22 +230,17 @@ public class RocksDBConnector implements MetricStore {
         });
     }
 
-    public static byte[] longToBytes(long l) {
-        byte[] result = new byte[8];
-        for (int i = 7; i >= 0; i--) {
-            result[i] = (byte)(l & 0xFF);
-            l >>= 8;
+    @Override
+    public boolean populateValue(Metric metric) {
+        byte[] key = metric.getKeyBytes();
+        try {
+            byte[] value = this.db.get(key);
+            metric.setValueFromBytes(value);
+            return value != null ? true : false;
+        } catch (RocksDBException ex){
+            LOG.error("Exception getting value:", ex);
+            return false;
         }
-        return result;
-    }
-
-    public static long bytesToLong(byte[] b) {
-        long result = 0;
-        for (int i = 0; i < 8; i++) {
-            result <<= 8;
-            result |= (b[i] & 0xFF);
-        }
-        return result;
     }
 
     /**
@@ -218,23 +249,25 @@ public class RocksDBConnector implements MetricStore {
      * @param settings search settings
      * @return List<String> metrics in store
      */
-    private void scan(String prefix, HashMap<String, Object> settings, IAggregator agg) {
-        LOG.info("Prefix scanning with {}", prefix);
+    private void scan(byte[] prefix, HashMap<String, Object> settings, IAggregator agg) {
+        LOG.info("Prefix scan with {}", new String(prefix));
         RocksIterator iterator = this.db.newIterator();
-        for (iterator.seek(prefix.getBytes()); iterator.isValid(); iterator.next()) {
+        LOG.info("before");
+        for (iterator.seek(prefix); iterator.isValid(); iterator.next()) {
             String key = new String(iterator.key());
-            LOG.debug("At key: {}", key);
+            LOG.info("At key: {}", key);
             Metric metric = new Metric(key);
 
             Set<TimeRange> timeRanges = checkMetric(metric, settings);
             if (timeRanges != null){ 
-                metric.setValue(Double.longBitsToDouble(bytesToLong(iterator.value())));
+                metric.setValueFromBytes(iterator.value());
                 agg.agg(metric, timeRanges);
             } else {
                 // skip, we may match something sliced inside of prefix
                 continue;
             }
         }
+        LOG.info("after {}", iterator.isValid());
     }
 
     /**
@@ -270,7 +303,11 @@ public class RocksDBConnector implements MetricStore {
      * the config specifies not to create the store
      */
     private Set<TimeRange> checkMetric(Metric possibleKey, HashMap<String, Object> settings)  {
-        if(settings.containsKey(StringKeywords.component) && 
+        if(settings.containsKey(StringKeywords.aggLevel) && 
+                (possibleKey.getAggLevel() == null ||
+                 !possibleKey.getAggLevel().equals(settings.get(StringKeywords.aggLevel)))) {
+            return null;
+        } else if(settings.containsKey(StringKeywords.component) && 
                 !possibleKey.getCompId().equals(settings.get(StringKeywords.component))) {
             return null;
         } else if(settings.containsKey(StringKeywords.metricName) && 

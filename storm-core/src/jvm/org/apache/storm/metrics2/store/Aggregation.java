@@ -24,14 +24,10 @@ import java.util.HashSet;
 
 public class Aggregation {
 
-    // Store component
-    private MetricStore store;
-
     // Key components
     private HashMap<String, Object> settings;
 
-    public Aggregation(MetricStore store) {
-        this.store = store;
+    public Aggregation() {
         settings = new HashMap<String, Object>();
     }
 
@@ -63,6 +59,10 @@ public class Aggregation {
         this.settings.put(StringKeywords.component, comp);
     }
 
+    public void filterAggLevel(String comp) {
+        this.settings.put(StringKeywords.aggLevel, comp);
+    }
+
     public void filterTime(Long timeStart, Long timeEnd) {
         HashSet<TimeRange> timeRangeSet = (HashSet<TimeRange>)this.settings.get(StringKeywords.timeRangeSet);
         if (timeRangeSet == null){
@@ -75,59 +75,68 @@ public class Aggregation {
 
     // Aggregations
 
-    public MetricResult sum() throws MetricException {
+    public MetricResult sum(MetricStore store) throws MetricException {
         MetricResult result = new MetricResult();
-        this.store.scan(settings, (metric, timeRanges) -> {
+        store.scan(settings, (metric, timeRanges) -> {
+            String metricName = metric.getMetricName();
             for (TimeRange tr : timeRanges){
-                Double value = result.getValueFor(tr);
+                Double value = result.getValueFor(metricName, tr);
                 value = value == null ? 0.0 : value;
-                result.setValueFor(tr, value + metric.getValue());
-                result.incCountFor(tr);
+                result.setValueFor(metricName, tr, value + metric.getValue());
+                result.incCountFor(metricName, tr);
             }
         });
         return result;
     }
 
-    public MetricResult min() throws MetricException {
+    public MetricResult min(MetricStore store) throws MetricException {
         MetricResult result = new MetricResult();
-        this.store.scan(settings, (metric, timeRanges) -> {
+        store.scan(settings, (metric, timeRanges) -> {
+            String metricName = metric.getMetricName();
             for (TimeRange tr : timeRanges) {
                 Double value = metric.getValue();
                 value = value == null ? 0.0 : value;
-                result.setValueFor(tr, Math.min(value, result.getValueFor(tr)));
-                result.incCountFor(tr);
+                result.setValueFor(metricName, tr, Math.min(value, result.getValueFor(metricName, tr)));
+                result.incCountFor(metricName, tr);
             }
         });
         return result;
     }
 
-    public MetricResult max() throws MetricException {
+    public MetricResult max(MetricStore store) throws MetricException {
         MetricResult result = new MetricResult();
-        this.store.scan(settings, (metric, timeRanges) -> {
+        store.scan(settings, (metric, timeRanges) -> {
+            String metricName = metric.getMetricName();
             for (TimeRange tr : timeRanges) {
                 Double value = metric.getValue();
-                result.setValueFor(tr, Math.max(value, result.getValueFor(tr)));
-                result.incCountFor(tr);
+                result.setValueFor(metricName, tr, Math.max(value, result.getValueFor(metricName, tr)));
+                result.incCountFor(metricName, tr);
             }
         });
         return result;
     }
 
-    public MetricResult mean() throws MetricException {
+    public MetricResult mean(MetricStore store) throws MetricException {
         MetricResult result = new MetricResult();
-        this.store.scan(settings, (metric, timeRanges) -> {
+        store.scan(settings, (metric, timeRanges) -> {
+            String metricName = metric.getMetricName();
             for (TimeRange tr : timeRanges) {
                 Double value = metric.getValue();
                 value = value == null ? 0.0 : value;
-                Double prev = result.getValueFor(tr);
+                Double prev = result.getValueFor(metricName, tr);
                 prev = prev == null ? 0.0 : prev;
-                result.setValueFor(tr, value + prev);
-                result.incCountFor(tr);
+                result.setValueFor(metricName, tr, value + prev);
+                result.incCountFor(metricName, tr);
             }
         });
-        for (TimeRange tr : result.getTimeRanges()){
-            if (result.getCountFor(tr) > 0) {
-                result.setValueFor(tr, result.getValueFor(tr) / result.getCountFor(tr));
+        for (String metricName : result.getMetricNames()) {
+            for (TimeRange tr : result.getTimeRanges(metricName)){
+                Long count = result.getCountFor(metricName, tr);
+                if (count != null && count > 0) {
+                    result.setValueFor(metricName, tr, 
+                            result.getValueFor(metricName, tr) / 
+                            count);
+                }
             }
         }
         return result;

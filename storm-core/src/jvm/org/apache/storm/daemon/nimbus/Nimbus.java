@@ -190,6 +190,7 @@ import com.codahale.metrics.Meter;
 import org.apache.storm.metrics2.store.MetricStoreConfig;
 import org.apache.storm.metrics2.store.Metric;
 import org.apache.storm.metrics2.store.MetricStore;
+import org.apache.storm.metrics2.store.AggregatingMetricStore;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
@@ -199,6 +200,8 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     
     //    Metrics
     private final MetricStore metricsStore;
+    private final MetricStore aggregatingMetricsStore;
+
     private static final Meter submitTopologyWithOptsCalls = registerMeter("nimbus:num-submitTopologyWithOpts-calls");
     private static final Meter submitTopologyCalls = registerMeter("nimbus:num-submitTopology-calls");
     private static final Meter killTopologyWithOptsCalls = registerMeter("nimbus:num-killTopologyWithOpts-calls");
@@ -1093,6 +1096,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         this.conf = conf;
 
         this.metricsStore = MetricStoreConfig.configure(conf);
+        this.aggregatingMetricsStore = new AggregatingMetricStore(this.metricsStore);
 
         if (hostPortInfo == null) {
             hostPortInfo = NimbusInfo.fromConf(conf);
@@ -2467,7 +2471,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             String topoId = workerStats.get_storm_id();
             Map<Long, LSWorkerStats> metrics = workerStats.get_metrics();
             if (metrics== null){
-                System.out.println("null metrics...!!");
                 continue;
             }
             for (Entry<Long, LSWorkerStats> metric : metrics.entrySet()) {
@@ -2475,7 +2478,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                 long tstamp = lsWorkerStats.get_time_stamp();
                 Map<String, Double> metricValues = lsWorkerStats.get_metrics();
                 if (metricValues == null) {
-                    System.out.println("null metric values...");
                     continue;
                 }
                 for (Entry<String, Double> metricValue : metricValues.entrySet()){
@@ -2484,7 +2486,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                     Double value = metricValue.getValue();
 
                     String[] keyParts = key.split("\\.");
-                    System.out.println(key);
                     String execId = keyParts[0];
                     String stream = keyParts[1];
                     String compId = keyParts[2];
@@ -2492,6 +2493,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                 
                     Metric m = new Metric(metricName, tstamp, execId, compId, stream, topoId, value);
                     this.metricsStore.insert(m);
+                    this.aggregatingMetricsStore.insert(m);
                 }
             }
         }
@@ -2499,6 +2501,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
 
     @Override
     public StormStats getStats(StatsSpec spec) {
+        LOG.info("Getting stats for spec {}", spec);
         StormStats result = new StormStats();
 
         List<Window> windows = spec.get_windows();
@@ -2514,13 +2517,19 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             windows.add(Window.ALL);
         }
 
-        Aggregation agg = new Aggregation(this.metricsStore);
+        Aggregation agg = new Aggregation();
+        Aggregation aggAllTime = new Aggregation();
+        aggAllTime.filterAggLevel("hourly");
+
+        MetricStore store = this.metricsStore;
        
         if (topologyId != null){
             agg.filterTopo(topologyId); 
+            aggAllTime.filterTopo(topologyId); 
         }
         if (component != null) {
             agg.filterComp(component); 
+            aggAllTime.filterComp(component); 
         }
 
         long startTime = 0;
@@ -2548,7 +2557,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
 
         if (window == Window.ALL){
             // no time boundaries
-            agg.filterTime(all_time, null);
+            aggAllTime.filterTime(all_time, null);
             agg.filterTime(ten_mins_ago, null);
             agg.filterTime(three_hrs_ago, null);
             agg.filterTime(one_day_ago, null);
@@ -2572,36 +2581,63 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         for (String metric : metrics) {
             if (metric != null) {
                 agg.filterMetric(metric); 
+                aggAllTime.filterMetric(metric);
             }   
+        }
 
-            try {
-                MetricResult metricResult = null;
+        try {
+            MetricResult metricResult = null;
+            if (op == StatsStoreOperation.SUM) {
+                metricResult = agg.sum(store);
+            } else if (op == StatsStoreOperation.MIN) {
+                metricResult = agg.min(store);
+            } else if (op == StatsStoreOperation.AVG) {
+                metricResult = agg.mean(store);
+            } else if (op == StatsStoreOperation.MAX) {
+                metricResult = agg.max(store);
+            } else {
+                LOG.error ("I can't handle that operation {}", op);
+            }
+
+            for (String metric : metricResult.getMetricNames()){
+                for (TimeRange tr : metricResult.getTimeRanges(metric)){
+                    Double value = metricResult.getValueFor(metric, tr);
+                    if (tr.startTime == ten_mins_ago){
+                        tenMinsStats.put_to_values (metric, value);
+                    } else if (tr.startTime == three_hrs_ago) {
+                        threeHrsStats.put_to_values (metric, value);
+                    } else if (tr.startTime == one_day_ago) {
+                        oneDayStats.put_to_values (metric, value);
+                    }
+                }
+            }
+
+            if (window == Window.ALL) {
+                // all time result
+                LOG.info("Computing metrics using aggregating store");
+                MetricResult allMetricResult = null;
                 if (op == StatsStoreOperation.SUM) {
-                    metricResult = agg.sum();
+                    allMetricResult = aggAllTime.sum(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.MIN) {
-                    metricResult = agg.min();
+                    allMetricResult = aggAllTime.min(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.AVG) {
-                    metricResult = agg.mean();
+                    allMetricResult = aggAllTime.mean(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.MAX) {
-                    metricResult = agg.max();
+                    allMetricResult = aggAllTime.max(aggregatingMetricsStore);
                 } else {
                     LOG.error ("I can't handle that operation {}", op);
                 }
 
-                for (TimeRange tr : metricResult.getTimeRanges()){
-                    if (tr.startTime == ten_mins_ago){
-                        tenMinsStats.put_to_values (metric, metricResult.getValueFor(tr));
-                    } else if (tr.startTime == three_hrs_ago) {
-                        threeHrsStats.put_to_values (metric, metricResult.getValueFor(tr));
-                    } else if (tr.startTime == one_day_ago) {
-                        oneDayStats.put_to_values (metric, metricResult.getValueFor(tr));
-                    } else {
-                        allTimeStats.put_to_values (metric, metricResult.getValueFor(tr));
+                for (String metric : allMetricResult.getMetricNames()){
+                    for (TimeRange tr : allMetricResult.getTimeRanges(metric)){
+                        LOG.info("time range {}", tr);
+                        Double value = allMetricResult.getValueFor(metric, tr);
+                        allTimeStats.put_to_values (metric, value);
                     }
                 }
-            } catch (MetricException exp){
-                LOG.error ("Exception computing metrics", exp);
             }
+        } catch (MetricException exp){
+            LOG.error ("Exception computing metrics", exp);
         }
 
         return result;

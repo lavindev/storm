@@ -23,8 +23,13 @@ import java.lang.StringBuilder;
 import java.util.Map;
 import java.util.List;
 import java.util.Set;
+import java.nio.ByteBuffer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Metric {
+    private final static Logger LOG = LoggerFactory.getLogger(Metric.class);
 
     private String metricName;
     private String topoId;
@@ -32,14 +37,22 @@ public class Metric {
     private int port;
     private String compId;
     private Long timestamp;
-    private Double value;
+
     private String executor;
     private String dimensions;
     private String stream;
     private String key;
+
+    private long count = 1L;
+    private double value = 0.0;
+    private double sum = 0.0;
+    private double min = 0.0;
+    private double max = 0.0;
+    private String aggLevel = "rt";
     private static String[] prefixOrder = {
         StringKeywords.timeStart,
         StringKeywords.topoId, 
+        StringKeywords.aggLevel,
         StringKeywords.metricName
     };/*
         StringKeywords.component, 
@@ -54,21 +67,39 @@ public class Metric {
         return value;
     }
 
+    public void setAggLevel(String aggLevel){
+        this.aggLevel = aggLevel;
+    }
+
+    public String getAggLevel(){
+        return this.aggLevel;
+    }
+
     public String getKey() {
-        if (key == null) {
-            key = serialize();
-        }
-        return key;
+        return serialize();
     }
 
     public void setValue(Double value) {
+        this.count = 1L;
+        this.min = value;
+        this.max = value;
+        this.sum = value;
         this.value = value;
     }
 
-    public Metric(String metric, Long TS, String executor, String compId, 
+    public void updateAverage(Double value) {
+        this.count += 1;
+        this.min = Math.min(this.min, value);
+        this.max = Math.max(this.max, value);
+        this.sum += value;
+        this.value = this.sum / this.count;
+        LOG.info("updating average {} {} {} {} {}", count, min, max, sum, value);
+    }
+
+    public Metric(String metric, Long timestamp, String executor, String compId, 
                   String stream, String topoId, Double value) {
         this.metricName = metric;
-        this.timestamp = TS;
+        this.timestamp = timestamp;
         this.executor = executor;
         this.compId = compId;
         this.topoId = topoId;
@@ -86,6 +117,8 @@ public class Metric {
 
     public Long getTimeStamp() { return this.timestamp; }
 
+    public void setTimeStamp(Long timestamp) { this.timestamp = timestamp; }
+
     public String getTopoId() { return this.topoId; }
 
     public String getMetricName() { return this.metricName; }
@@ -95,6 +128,10 @@ public class Metric {
         x.append(this.timestamp);
         x.append("|");
         x.append(this.topoId);
+        x.append("|");
+        if (aggLevel != null) {
+            x.append(aggLevel);
+        }
         x.append("|");
         x.append(this.metricName);
         x.append("|");
@@ -115,19 +152,22 @@ public class Metric {
         String[] elements = str.split("\\|");
         this.timestamp = Long.parseLong(elements[0]);
         this.topoId = elements[1];
-        this.metricName = elements[2];
-        this.compId = elements[3];
-        this.executor = elements[4];
-        this.host = elements[5];
-        this.port = Integer.parseInt(elements[6]);
-        this.stream = elements[7];
+        this.aggLevel = elements[2];
+        this.metricName = elements[3];
+        this.compId = elements[4];
+        this.executor = elements[5];
+        this.host = elements[6];
+        this.port = Integer.parseInt(elements[7]);
+        this.stream = elements[8];
     }
 
     public String toString() {
-        return serialize() + " => " + this.value;
+        return serialize() + " => count: " + this.count + " value: " + this.value + " min: " + this.min + " max: " + this.max + " sum: " + this.sum;
     }
 
-    public static String createPrefix(Map<String, Object> settings){
+    public static byte[] createPrefix(Map<String, Object> settings){
+        return null;
+        /*
         StringBuilder x = new StringBuilder();
         for(String each : prefixOrder) {
             Object cur = null;
@@ -147,6 +187,9 @@ public class Metric {
                 }
             } else {
                 cur = settings.get(each);
+                if (cur == null && each == StringKeywords.aggLevel){
+                    cur = "rt";
+                }
             }
 
             if(cur != null){
@@ -161,7 +204,70 @@ public class Metric {
             return null;
         } else {
             x.deleteCharAt(x.length()-1);
-            return x.toString();
+            return x.toString().getBytes();
+        }
+        */
+    }
+
+    public byte[] getKeyBytes(){
+        return this.getKey().getBytes();
+    }
+
+    public byte[] getValueBytes(){
+        int bufferSize = count > 1 ? 320 : 128;
+        LOG.info("Buffer size {}", bufferSize);
+        ByteBuffer bb = ByteBuffer.allocate(bufferSize);
+        bb.putLong(count);
+        bb.putDouble(value);
+        if (count > 1) {
+            bb.putDouble(min);
+            bb.putDouble(max);
+            bb.putDouble(sum);
+        }
+        LOG.info("buffer size {}", bb.arrayOffset());
+        return bb.array();
+    }
+
+    public void setValueFromBytes(byte[] valueInBytes){
+        if (valueInBytes == null) {
+            LOG.error("Null bytes!");
+            count = 0L;
+            value = 0.0;
+            min = 0.0;
+            max = 0.0;
+            sum = 0.0;
+            return;
+        }
+        ByteBuffer bb = ByteBuffer.wrap(valueInBytes);
+        count = bb.getLong();
+        value = bb.getDouble();
+        if (count > 1) {
+            min = bb.getDouble();
+            max = bb.getDouble();
+            sum = bb.getDouble();
+        } else {
+            min = value;
+            max = value;
+            sum = value;
         }
     }
+
+    public static byte[] longToBytes(long l) {
+        byte[] result = new byte[8];
+        for (int i = 7; i >= 0; i--) {
+            result[i] = (byte)(l & 0xFF);
+            l >>= 8;
+        }
+        return result;
+    }
+
+    public static long bytesToLong(byte[] b) {
+        long result = 0;
+        for (int i = 0; i < 8; i++) {
+            result <<= 8;
+            result |= (b[i] & 0xFF);
+        }
+        return result;
+    }
+
 }
