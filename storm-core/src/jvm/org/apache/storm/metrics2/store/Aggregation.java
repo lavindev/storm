@@ -77,12 +77,13 @@ public class Aggregation {
 
     public MetricResult sum(MetricStore store) throws MetricException {
         MetricResult result = new MetricResult();
-        store.scan(settings, (metric, timeRanges) -> {
+        store.scan (settings, (metric, timeRanges) -> {
             String metricName = metric.getMetricName();
-            for (TimeRange tr : timeRanges){
+            for (TimeRange tr : timeRanges) {
                 Double value = result.getValueFor(metricName, tr);
                 value = value == null ? 0.0 : value;
-                result.setValueFor(metricName, tr, value + metric.getValue());
+                Double newValue = value + metric.getValue();
+                result.setValueFor(metricName, tr, newValue);
                 result.incCountFor(metricName, tr);
             }
         });

@@ -30,6 +30,6 @@ public class AggregatingMetricStoreTest {
                               "topo-1",
                               1.0);
         s.insert(m);
-        assertEquals(m.getTimeStamp(), 1483228800000L);
+        assertEquals((long)m.getTimeStamp(), 1483228800000L);
     }
 }

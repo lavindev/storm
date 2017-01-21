@@ -34,14 +34,13 @@ public class Metric {
     private String metricName;
     private String topoId;
     private String host;
-    private int port;
+    private long port = 0;
     private String compId;
-    private Long timestamp;
+    private long timestamp = 0;
 
     private String executor;
     private String dimensions;
     private String stream;
-    private String key;
 
     private long count = 1L;
     private double value = 0.0;
@@ -50,10 +49,10 @@ public class Metric {
     private double max = 0.0;
     private String aggLevel = "rt";
     private static String[] prefixOrder = {
-        StringKeywords.timeStart,
-        StringKeywords.topoId, 
-        StringKeywords.aggLevel,
-        StringKeywords.metricName
+        StringKeywords.timeStart
+    //   StringKeywords.topoId, 
+    //   StringKeywords.aggLevel,
+    //   StringKeywords.metricName
     };/*
         StringKeywords.component, 
         StringKeywords.executor, 
@@ -64,7 +63,11 @@ public class Metric {
     */
 
     public Double getValue() {
-        return value;
+        if (this.aggLevel.equals("rt")){
+            return this.value; 
+        } else {
+            return this.sum;
+        }
     }
 
     public void setAggLevel(String aggLevel){
@@ -73,10 +76,6 @@ public class Metric {
 
     public String getAggLevel(){
         return this.aggLevel;
-    }
-
-    public String getKey() {
-        return serialize();
     }
 
     public void setValue(Double value) {
@@ -105,12 +104,10 @@ public class Metric {
         this.topoId = topoId;
         this.stream = stream;
         this.value = value;
-        this.key = null;
     }
 
-    public Metric(String str) {
-        this.key = str;
-        deserialize(str);
+    public Metric(byte[] bytes) {
+        deserialize(bytes);
     }
 
     public String getCompId() { return this.compId; }
@@ -123,15 +120,73 @@ public class Metric {
 
     public String getMetricName() { return this.metricName; }
 
-    public String serialize() {
+    public byte[] serialize() {
+        ByteBuffer bb = ByteBuffer.allocate(320);
+        bb.putLong(this.timestamp);
+        putString(bb, this.topoId);
+        putString(bb, aggLevel);
+        putString(bb, metricName);
+        putString(bb, compId);
+        putString(bb, executor);
+        putString(bb, host);
+        bb.putLong(port);
+        putString(bb, stream);
+        int length = bb.position();
+        bb.position(0); //rewind
+        byte[] result = new byte[length];
+        bb.get(result, 0, length);
+        return result;
+    }
+
+    public void deserialize(byte[] bytes) {
+        ByteBuffer bb = ByteBuffer.wrap(bytes);
+        this.timestamp = bb.getLong();
+        this.topoId = getString(bb);
+        this.aggLevel = getString(bb);
+        this.metricName = getString(bb);
+        this.compId = getString(bb);
+        this.executor = getString(bb);
+        this.host = getString(bb);
+        this.port = bb.getLong();
+        this.stream = getString(bb);
+    }
+
+    public static void putString(ByteBuffer bb, String string) {
+        if (string == null) {
+            bb.putInt(0);
+            return;
+        }
+        int size = string.length();
+        bb.putInt(size);
+        try { 
+            bb.put(string.getBytes("UTF-8"));
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+    }
+
+    public String getString(ByteBuffer bb) {
+        int size = bb.getInt();
+        if (size == 0){
+            return null;
+        }
+        byte[] bytes = new byte[size];
+        bb.get(bytes);
+        try { 
+            return new String(bytes, "UTF-8");
+        } catch (Exception e) {
+            System.out.println(e);
+            return null;
+        }
+    }
+
+    public String toString() {
         StringBuilder x = new StringBuilder();
-        x.append(this.timestamp);
+        x.append(String.format("%015d",this.timestamp));
         x.append("|");
         x.append(this.topoId);
         x.append("|");
-        if (aggLevel != null) {
-            x.append(aggLevel);
-        }
+        x.append(aggLevel);
         x.append("|");
         x.append(this.metricName);
         x.append("|");
@@ -144,31 +199,12 @@ public class Metric {
         x.append(this.port);
         x.append("|");
         x.append(this.stream);
-
-        return String.valueOf(x);
-    }
-
-    public void deserialize(String str) {
-        String[] elements = str.split("\\|");
-        this.timestamp = Long.parseLong(elements[0]);
-        this.topoId = elements[1];
-        this.aggLevel = elements[2];
-        this.metricName = elements[3];
-        this.compId = elements[4];
-        this.executor = elements[5];
-        this.host = elements[6];
-        this.port = Integer.parseInt(elements[7]);
-        this.stream = elements[8];
-    }
-
-    public String toString() {
-        return serialize() + " => count: " + this.count + " value: " + this.value + " min: " + this.min + " max: " + this.max + " sum: " + this.sum;
+        return x.toString() + " => count: " + this.count + " value: " + this.value + " min: " + this.min + " max: " + this.max + " sum: " + this.sum;
     }
 
     public static byte[] createPrefix(Map<String, Object> settings){
-        return null;
-        /*
         StringBuilder x = new StringBuilder();
+        ByteBuffer bb = ByteBuffer.allocate(320);
         for(String each : prefixOrder) {
             Object cur = null;
 
@@ -185,47 +221,45 @@ public class Metric {
                     }
                     cur = minTime;
                 }
+                LOG.info("The start time for prefix is {}", cur);
+                bb.putLong(cur == null ? 0L : (long)cur);
             } else {
                 cur = settings.get(each);
                 if (cur == null && each == StringKeywords.aggLevel){
                     cur = "rt";
                 }
+                putString(bb, cur == null ? null : (String)cur);
             }
 
-            if(cur != null){
-                x.append(cur.toString());
-                x.append("|");
-            } else {
+            if(cur == null){
                 break;
             }
         }   
-
-        if(x.length() == 0) {
-            return null;
-        } else {
-            x.deleteCharAt(x.length()-1);
-            return x.toString().getBytes();
-        }
-        */
+        int length= bb.position();
+        byte[] result = new byte[length];
+        bb.position(0); // go to beginning
+        bb.get(result, 0, length); // copy to position
+        return result;
     }
 
     public byte[] getKeyBytes(){
-        return this.getKey().getBytes();
+        return this.serialize();
     }
 
     public byte[] getValueBytes(){
         int bufferSize = count > 1 ? 320 : 128;
-        LOG.info("Buffer size {}", bufferSize);
         ByteBuffer bb = ByteBuffer.allocate(bufferSize);
         bb.putLong(count);
         bb.putDouble(value);
-        if (count > 1) {
-            bb.putDouble(min);
-            bb.putDouble(max);
-            bb.putDouble(sum);
-        }
-        LOG.info("buffer size {}", bb.arrayOffset());
-        return bb.array();
+        bb.putDouble(min);
+        bb.putDouble(max);
+        bb.putDouble(sum);
+
+        int length = bb.position();
+        bb.position(0); //rewind
+        byte[] result = new byte[length];
+        bb.get(result, 0, length);
+        return result;
     }
 
     public void setValueFromBytes(byte[] valueInBytes){
@@ -241,15 +275,9 @@ public class Metric {
         ByteBuffer bb = ByteBuffer.wrap(valueInBytes);
         count = bb.getLong();
         value = bb.getDouble();
-        if (count > 1) {
-            min = bb.getDouble();
-            max = bb.getDouble();
-            sum = bb.getDouble();
-        } else {
-            min = value;
-            max = value;
-            sum = value;
-        }
+        min = bb.getDouble();
+        max = bb.getDouble();
+        sum = bb.getDouble();
     }
 
     public static byte[] longToBytes(long l) {

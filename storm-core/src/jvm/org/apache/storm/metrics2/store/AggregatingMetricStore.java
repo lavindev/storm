@@ -22,7 +22,9 @@ public class AggregatingMetricStore implements MetricStore {
 
     @Override 
     public void insert(Metric metric){
+        // value is instantaneous
         Double value = metric.getValue();
+
         LOG.info("before inserting hourly {} val: {}", metric.toString(), value);
         // get the hourly bucket for metric
         Long timeInMs = metric.getTimeStamp();

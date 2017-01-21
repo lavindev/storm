@@ -2518,6 +2518,8 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         }
 
         Aggregation agg = new Aggregation();
+        agg.filterAggLevel("rt");
+
         Aggregation aggAllTime = new Aggregation();
         aggAllTime.filterAggLevel("hourly");
 
@@ -2601,6 +2603,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
 
             for (String metric : metricResult.getMetricNames()){
                 for (TimeRange tr : metricResult.getTimeRanges(metric)){
+
                     Double value = metricResult.getValueFor(metric, tr);
                     if (tr.startTime == ten_mins_ago){
                         tenMinsStats.put_to_values (metric, value);
