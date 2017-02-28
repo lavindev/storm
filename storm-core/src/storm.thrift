@@ -633,17 +633,24 @@ struct TopologyHistoryInfo {
 }
 
 enum StatsStoreOperation {
-  SUM = 0,
-  AVG = 1,
-  MIN = 2,
-  MAX = 3
+  SUM     = 0,
+  AVG     = 1,
+  MIN     = 2,
+  MAX     = 3,
+  SERIES  = 4 // don't aggregate, return timeseries
 }
 
 enum Window {
   ALL       = 0,
-  TEN_MIN  = 1,
+  TEN_MIN   = 1,
   THREE_HR  = 2,
-  ONE_DAY   = 3 
+  ONE_DAY   = 3
+}
+
+enum AggLevel {
+  RAW       = 0,
+  TEN_MIN   = 1,
+  HOUR      = 2
 }
 
 struct StatsSpec {
@@ -653,6 +660,9 @@ struct StatsSpec {
   4: optional string component;
   5: optional string executor_id;
   6: optional list<string> metrics;
+  7: optional i64 start_time_sec;
+  8: optional i64 end_time_sec;
+  9: optional AggLevel min_agg_level;
 }
 
 struct StormWindowedStats {
@@ -663,8 +673,15 @@ struct StormWindowedStats {
   5: optional map<string, double> values;
 }
 
+struct StormSeriesStats {
+  1: optional list<i64> times;
+  2: optional map<string, map<i64, double>> values; 
+}
+
 struct StormStats {
   1: optional list<StormWindowedStats> windowed_stats;
+  // series name? should the below be a map?
+  2: optional StormSeriesStats series_stats;
 }
 
 service Nimbus {
@@ -822,4 +839,20 @@ exception HBAuthorizationException {
 
 exception HBExecutionException {
   1: required string msg;
+}
+
+struct StatsMetadata {
+    1: optional map<string, i32> topo_ids;
+    2: optional map<string, i32> comp_ids;
+    3: optional map<string, i32> metric_ids;
+    4: optional map<string, i32> stream_ids;
+    5: optional map<string, i32> host_ids;
+    6: optional map<string, i32> executor_ids;
+
+    7: optional map<i32, string> rev_topo_ids;
+    8: optional map<i32, string> rev_comp_ids;
+    9: optional map<i32, string> rev_metric_ids;
+    10: optional map<i32, string> rev_stream_ids;
+    11: optional map<i32, string> rev_host_ids;
+    12: optional map<i32, string> rev_executor_ids;
 }

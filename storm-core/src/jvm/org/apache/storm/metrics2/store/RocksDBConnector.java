@@ -40,6 +40,7 @@ import org.rocksdb.PlainTableConfig;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.IndexType;
 import org.rocksdb.CompactionStyle;
+import org.rocksdb.FlushOptions;
 
 /**
  * This class implements the Storm Metrics Store Interface using RocksDB as a store
@@ -53,6 +54,10 @@ import org.rocksdb.CompactionStyle;
 public class RocksDBConnector implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(RocksDBConnector.class);
     private RocksDB db;
+    private FlushOptions fops;
+    private Metadata meta;
+
+    private byte[] metadataKey = new byte[] {(byte)0x00};
 
     /**
      * Implements the prepare method of the Metric Store, create RocksDB instance
@@ -107,9 +112,8 @@ public class RocksDBConnector implements MetricStore {
             tfc.setBlockCacheSize((long)16*1024*1024);
             tfc.setIndexType(IndexType.kHashSearch);
             tfc.setBlockSize((long)4*1024);
-            options.useCappedPrefixExtractor(8); // epoch in ms length
+            options.useCappedPrefixExtractor(44); // epoch in ms length
             options.setTableFormatConfig(tfc);
-
             
             options.setMemtablePrefixBloomSizeRatio(10);
             options.setBloomLocality(1);
@@ -119,7 +123,7 @@ public class RocksDBConnector implements MetricStore {
             options.setMaxWriteBufferNumber(2);
             options.setMinWriteBufferNumberToMerge(1);
             options.setVerifyChecksumsInCompaction(false);
-            options.setDisableDataSync(true);
+            //options.setDisableDataSync(true);
             options.setBytesPerSync(2 << 20);
 
             options.setCompactionStyle(CompactionStyle.UNIVERSAL);
@@ -147,6 +151,21 @@ public class RocksDBConnector implements MetricStore {
         }
 
         LOG.info ("RocksDB Stats: {}", getStats());
+
+        // restore metadata
+        LOG.info ("Restoring metadata");
+        Metadata.initialize();
+        try {
+            Metadata.deserialize(this.db.get(metadataKey));
+        } catch (RocksDBException e){
+            LOG.error ("Failure to restore Metadata", e);
+        } catch (Exception ee){
+            LOG.error ("Blah", ee);
+        }
+        LOG.info ("Metadata contents {}", Metadata.contents());
+
+        fops = new FlushOptions();
+        fops.setWaitForFlush(true);
     }
 
     public String getStats() {
@@ -171,6 +190,12 @@ public class RocksDBConnector implements MetricStore {
             byte[] value = m.getValueBytes();
 
             this.db.put(key, value);
+            byte[] metadataBytes = Metadata.serialize();
+            if (metadataBytes != null) {
+                LOG.info ("Writing new metadata {}", Metadata.contents());
+                this.db.put(metadataKey, metadataBytes);
+            }
+            this.db.flush(fops);
         } catch (RocksDBException e) {
             LOG.error("Error inserting into RocksDB", e);
         }
@@ -187,6 +212,8 @@ public class RocksDBConnector implements MetricStore {
         RocksIterator iterator = this.db.newIterator();
         for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
             Metric metric = new Metric(iterator.key());
+            String prefixStr = Hex.encodeHexString(metric.getKeyBytes());
+            LOG.info("full scanning @ prefix {}", prefixStr);
             metric.setValueFromBytes(iterator.value());
             agg.agg(metric, null);
         }
@@ -216,10 +243,13 @@ public class RocksDBConnector implements MetricStore {
             //LOG.info("At key: {}", key);
 
             Metric metric = new Metric(iterator.key());
-            Set<TimeRange> timeRanges = checkMetric(metric, settings);
+            Set<TimeRange> timeRanges = checkRequiredSettings(metric, settings);
+            boolean include = checkMetric(metric, settings);
             if (timeRanges != null) {
-                metric.setValueFromBytes(iterator.value());
-                agg.agg(metric, timeRanges);
+                if (include) {
+                    metric.setValueFromBytes(iterator.value());
+                    agg.agg(metric, timeRanges);
+                }
             }
         }
     }
@@ -258,9 +288,11 @@ public class RocksDBConnector implements MetricStore {
     private void scan(byte[] prefix, HashMap<String, Object> settings, IAggregator agg) {
         String prefixStr = Hex.encodeHexString(prefix);
         LOG.info("Prefix scan with {} and length {}", prefixStr, prefix.length);
-//        ReadOptions ro = new ReadOptions();
-//        ro.setPrefixSameAsStart(true);
-        RocksIterator iterator = this.db.newIterator();
+        ReadOptions ro = new ReadOptions();
+        //ro.setPrefixSameAsStart(false);
+        ro.setTotalOrderSeek(true);
+        RocksIterator iterator = this.db.newIterator(ro);
+        iterator.seekToFirst();
         long startTime = System.nanoTime();
         long numRecords = 0;
         long numScannedRecords = 0;
@@ -268,17 +300,21 @@ public class RocksDBConnector implements MetricStore {
             //String key = new String(iterator.key());
 
             Metric metric = new Metric(iterator.key());
-            LOG.info("At key: {}", metric.toString());
+            LOG.info("Scanning key: {}", metric.toString());
 
-            Set<TimeRange> timeRanges = checkMetric(metric, settings);
+            Set<TimeRange> timeRanges = checkRequiredSettings(metric, settings);
+            boolean include = checkMetric(metric, settings);
             numScannedRecords++;
             if (timeRanges != null){ 
-                numRecords++;
-                metric.setValueFromBytes(iterator.value());
-                agg.agg(metric, timeRanges);
+                if (include) {
+                    LOG.info("Match key: {}", Hex.encodeHexString(iterator.key()));
+                    numRecords++;
+                    metric.setValueFromBytes(iterator.value());
+                    agg.agg(metric, timeRanges);
+                }
             } else {
-                // skip, we may match something sliced inside of prefix
-                continue;
+                // if we don't find in required settings, no need to continue
+                break;
             }
         }
         LOG.info("prefix scan complete for {} with {} records and {} scanned total in {} ms", 
@@ -317,32 +353,46 @@ public class RocksDBConnector implements MetricStore {
      * @throws MetricException if there is a missing required configuration or if the store does not exist but
      * the config specifies not to create the store
      */
-    private Set<TimeRange> checkMetric(Metric possibleKey, HashMap<String, Object> settings)  {
-        if(settings.containsKey(StringKeywords.aggLevel) && 
-                (possibleKey.getAggLevel() == null ||
-                 !possibleKey.getAggLevel().equals(settings.get(StringKeywords.aggLevel)))) {
-            return null;
-        } else if(settings.containsKey(StringKeywords.component) && 
+    private boolean checkMetric(Metric possibleKey, HashMap<String, Object> settings)  {
+        LOG.debug("Checking {}", Hex.encodeHexString(possibleKey.getKeyBytes()));
+        if(settings.containsKey(StringKeywords.component) && 
                 !possibleKey.getCompId().equals(settings.get(StringKeywords.component))) {
-            return null;
+            return false;
         } else if(settings.containsKey(StringKeywords.metricName) && 
                 !possibleKey.getMetricName().equals(settings.get(StringKeywords.metricName))) {
+            return false;
+        }
+        return true;
+    }
+
+    private Set<TimeRange> checkRequiredSettings(Metric possibleKey, HashMap<String, Object> settings)  {
+        LOG.debug("Checking {}", Hex.encodeHexString(possibleKey.getKeyBytes()));
+        LOG.info("compare agg level: {} {}", possibleKey.getAggLevel(), ((Integer)settings.get(StringKeywords.aggLevel)).byteValue());
+        if(settings.containsKey(StringKeywords.aggLevel) && 
+                (possibleKey.getAggLevel() == null ||
+                 !possibleKey.getAggLevel().equals(((Integer)settings.get(StringKeywords.aggLevel)).byteValue()))) {
+            LOG.info("DOES NOT MATCH agg level: {} {}", possibleKey.getAggLevel(), ((Integer)settings.get(StringKeywords.aggLevel)).byteValue());
             return null;
         } else if(settings.containsKey(StringKeywords.topoId) && 
                 !possibleKey.getTopoId().equals(settings.get(StringKeywords.topoId))) {
+            LOG.info("DOES NOT MATCH topo {} {}", possibleKey.getTopoId(), settings.get(StringKeywords.topoId));
             return null;
         } else if(settings.containsKey(StringKeywords.timeRangeSet)){ 
             Set<TimeRange> timeRangeSet = (Set<TimeRange>)settings.get(StringKeywords.timeRangeSet);
             Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
             for (TimeRange tr : timeRangeSet){
                 Long tstamp = possibleKey.getTimeStamp();
+                LOG.info("tstamp {} tr {}", tstamp, tr);
                 if (tr.contains(tstamp)){
                     matchedTimeRanges.add(tr);
                 }
             }
+            if (matchedTimeRanges.size() == 0){
+                LOG.info("DOES NOT MATCH time ranges");
+            }
             return matchedTimeRanges.size() > 0 ? matchedTimeRanges : null;
         }
-        return new HashSet<TimeRange>();
+        return null;
     }
 
     public void remove() {

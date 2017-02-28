@@ -22,6 +22,7 @@ import java.lang.String;
 import java.lang.StringBuilder;
 import java.util.Map;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
 import java.nio.ByteBuffer;
 
@@ -32,11 +33,18 @@ public class Metric {
     private final static Logger LOG = LoggerFactory.getLogger(Metric.class);
 
     private String metricName;
-    private String topoId;
+    private String topoIdStr;
     private String host;
     private long port = 0;
-    private String compId;
+    private String compIdStr;
     private long timestamp = 0;
+
+    private Integer metricId;
+    private Integer execId;
+    private Integer compId;
+    private Integer topoId;
+    private Integer streamId;
+    private Integer hostId;
 
     private String executor;
     private String dimensions;
@@ -47,34 +55,33 @@ public class Metric {
     private double sum = 0.0;
     private double min = 0.0;
     private double max = 0.0;
-    private String aggLevel = "rt";
+    private Byte aggLevel = (byte)0;
+
     private static String[] prefixOrder = {
-        StringKeywords.timeStart
-    //   StringKeywords.topoId, 
-    //   StringKeywords.aggLevel,
-    //   StringKeywords.metricName
-    };/*
+        StringKeywords.timeStart,
+        StringKeywords.topoId, 
+        StringKeywords.aggLevel,
+        StringKeywords.metricSet,
         StringKeywords.component, 
         StringKeywords.executor, 
         StringKeywords.host,
         StringKeywords.port, 
         StringKeywords.stream
     };
-    */
 
     public Double getValue() {
-        if (this.aggLevel.equals("rt")){
+        if (this.aggLevel == 0){
             return this.value; 
         } else {
             return this.sum;
         }
     }
 
-    public void setAggLevel(String aggLevel){
+    public void setAggLevel(Byte aggLevel){
         this.aggLevel = aggLevel;
     }
 
-    public String getAggLevel(){
+    public Byte getAggLevel(){
         return this.aggLevel;
     }
 
@@ -92,45 +99,65 @@ public class Metric {
         this.max = Math.max(this.max, value);
         this.sum += value;
         this.value = this.sum / this.count;
-        LOG.info("updating average {} {} {} {} {}", count, min, max, sum, value);
+        LOG.debug("updating average {} {} {} {} {}", count, min, max, sum, value);
     }
 
     public Metric(String metric, Long timestamp, String executor, String compId, 
-                  String stream, String topoId, Double value) {
+                  String stream, String topoIdStr, Double value) {
         this.metricName = metric;
         this.timestamp = timestamp;
         this.executor = executor;
-        this.compId = compId;
-        this.topoId = topoId;
+        this.compIdStr = compId;
+        this.topoIdStr = topoIdStr;
         this.stream = stream;
         this.value = value;
+
+        // get numeric representation of each string property
+        this.metricId = Metadata.getMetricId(metricName);
+        this.execId = Metadata.getExecId(executor);
+        this.compId = Metadata.getCompId(compId);
+        this.topoId = Metadata.getTopoId(topoIdStr);
+        this.streamId = Metadata.getStreamId(stream);
+        this.hostId = Metadata.getHostId("localhost");
+        //LOG.info(Metadata.contents());
     }
 
     public Metric(byte[] bytes) {
         deserialize(bytes);
+        //LOG.info("New metric from db. Metadata has {} ", Metadata.contents());
+        this.metricName = Metadata.getMetric(this.metricId);
+        this.executor = Metadata.getExec(this.execId);
+        this.compIdStr = Metadata.getComp(this.compId);
+        this.topoIdStr = Metadata.getTopo(this.topoId);
+        this.stream = Metadata.getStream(this.streamId);
+        this.host = Metadata.getHost(this.hostId);
     }
 
-    public String getCompId() { return this.compId; }
+    public String getCompId() { return this.compIdStr; }
 
     public Long getTimeStamp() { return this.timestamp; }
 
     public void setTimeStamp(Long timestamp) { this.timestamp = timestamp; }
 
-    public String getTopoId() { return this.topoId; }
+    public String getTopoId() { return this.topoIdStr; }
 
     public String getMetricName() { return this.metricName; }
+    
+    public String getExecutor(){ return this.executor; }
 
     public byte[] serialize() {
         ByteBuffer bb = ByteBuffer.allocate(320);
+        bb.put((byte)1); // non metadata
+        bb.put(this.aggLevel);
+        bb.putInt(topoId);
         bb.putLong(this.timestamp);
-        putString(bb, this.topoId);
-        putString(bb, aggLevel);
-        putString(bb, metricName);
-        putString(bb, compId);
-        putString(bb, executor);
-        putString(bb, host);
+        bb.putInt(metricId);
+        bb.putInt(compId);
+        bb.putInt(execId);
+        bb.putInt(hostId);
         bb.putLong(port);
-        putString(bb, stream);
+        bb.putInt(streamId);
+
         int length = bb.position();
         bb.position(0); //rewind
         byte[] result = new byte[length];
@@ -140,15 +167,17 @@ public class Metric {
 
     public void deserialize(byte[] bytes) {
         ByteBuffer bb = ByteBuffer.wrap(bytes);
+
+        bb.get(); // type
+        this.aggLevel = bb.get();
+        this.topoId = bb.getInt();
         this.timestamp = bb.getLong();
-        this.topoId = getString(bb);
-        this.aggLevel = getString(bb);
-        this.metricName = getString(bb);
-        this.compId = getString(bb);
-        this.executor = getString(bb);
-        this.host = getString(bb);
+        this.metricId = bb.getInt();
+        this.compId = bb.getInt();
+        this.execId = bb.getInt();
+        this.hostId = bb.getInt();
         this.port = bb.getLong();
-        this.stream = getString(bb);
+        this.streamId = bb.getInt();
     }
 
     public static void putString(ByteBuffer bb, String string) {
@@ -184,13 +213,13 @@ public class Metric {
         StringBuilder x = new StringBuilder();
         x.append(String.format("%015d",this.timestamp));
         x.append("|");
-        x.append(this.topoId);
+        x.append(this.topoIdStr);
         x.append("|");
         x.append(aggLevel);
         x.append("|");
         x.append(this.metricName);
         x.append("|");
-        x.append(this.compId);
+        x.append(this.compIdStr);
         x.append("|");
         x.append(this.executor);
         x.append("|");
@@ -202,43 +231,75 @@ public class Metric {
         return x.toString() + " => count: " + this.count + " value: " + this.value + " min: " + this.min + " max: " + this.max + " sum: " + this.sum;
     }
 
-    public static byte[] createPrefix(Map<String, Object> settings){
+    public String id() {
         StringBuilder x = new StringBuilder();
+        x.append(this.topoIdStr);
+        x.append("|");
+        x.append(aggLevel);
+        x.append("|");
+        x.append(this.metricName);
+        x.append("|");
+        x.append(this.compIdStr);
+        x.append("|");
+        x.append(this.executor);
+        x.append("|");
+        x.append(this.host);
+        x.append("|");
+        x.append(this.port);
+        x.append("|");
+        x.append(this.stream);
+        return x.toString();
+    }
+
+    public static byte[] createPrefix(Map<String, Object> settings){
+
+        String topoIdStr   = (String) settings.get(StringKeywords.topoId);
+        HashSet<String> metricIds = (HashSet<String>) settings.get(StringKeywords.metricSet);
+        String metricIdStr = null;
+        if (metricIds != null && metricIds.size() == 1){
+            metricIdStr = metricIds.iterator().next();
+        }
+
+        String compIdStr   = (String) settings.get(StringKeywords.component);
+        String execIdStr   = (String) settings.get(StringKeywords.executor);
+        String host        = (String) settings.get(StringKeywords.host);
+        String port        = (String) settings.get(StringKeywords.port);
+        String stream      = (String) settings.get(StringKeywords.stream);
+        Byte aggLevel      = ((Integer) settings.get(StringKeywords.aggLevel)).byteValue();
+
+        LOG.info("Creating prefix for {} {} {} {} {} {} {} {}\n Meta: \n{}", 
+                aggLevel, topoIdStr, metricIdStr, compIdStr, execIdStr, host, port, stream, Metadata.contents());
+
+
         ByteBuffer bb = ByteBuffer.allocate(320);
-        for(String each : prefixOrder) {
-            Object cur = null;
-
-            if (each == StringKeywords.timeStart){
-                // find minimium time beteween all time ranges
-                // this would be better organized as an ordered set
-                Set<TimeRange> timeRangeSet = (Set<TimeRange>)settings.get(StringKeywords.timeRangeSet);
-                if (timeRangeSet != null){
-                    Long minTime = null;
-                    for (TimeRange tr : timeRangeSet){
-                        if (minTime == null || tr.startTime < minTime){
-                            minTime = tr.startTime;
-                        }
-                    }
-                    cur = minTime;
+        bb.put((byte)1); // non metadata
+        bb.put(aggLevel);
+        Set<TimeRange> timeRangeSet = (Set<TimeRange>)settings.get(StringKeywords.timeRangeSet);
+        Long cur = 0L;
+        if (timeRangeSet != null){
+            Long minTime = null;
+            for (TimeRange tr : timeRangeSet){
+                if (minTime == null || tr.startTime < minTime){
+                    minTime = tr.startTime;
                 }
-                LOG.info("The start time for prefix is {}", cur);
-                bb.putLong(cur == null ? 0L : (long)cur);
-            } else {
-                cur = settings.get(each);
-                if (cur == null && each == StringKeywords.aggLevel){
-                    cur = "rt";
-                }
-                putString(bb, cur == null ? null : (String)cur);
             }
+            cur = minTime;
+        }
+        LOG.info("The start time for prefix is {}, the topo is {}", cur, topoIdStr);
+        bb.putInt(Metadata.getTopoId(topoIdStr));
+        bb.putLong(cur == null ? 0L : cur.longValue());
+        bb.putInt(metricIdStr != null ? Metadata.getMetricId(metricIdStr) : 0);
+        bb.putInt(compIdStr   != null ? Metadata.getCompId(compIdStr) : 0);
+        bb.putInt(execIdStr   != null ? Metadata.getExecId(execIdStr) : 0);
+        bb.putInt(host        != null ? Metadata.getHostId(host) : 0);
+        bb.putLong(port       != null ? Long.parseLong(port) : 0L);
+        bb.putInt(stream      != null ? Metadata.getStreamId(stream) : 0);
 
-            if(cur == null){
-                break;
-            }
-        }   
         int length= bb.position();
-        byte[] result = new byte[length];
         bb.position(0); // go to beginning
+        byte[] result = new byte[length];
         bb.get(result, 0, length); // copy to position
+
         return result;
     }
 

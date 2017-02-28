@@ -111,6 +111,8 @@ import org.apache.storm.generated.StatsSpec;
 import org.apache.storm.generated.Window;
 import org.apache.storm.generated.StatsStoreOperation;
 import org.apache.storm.generated.StormWindowedStats;
+import org.apache.storm.generated.StormSeriesStats;
+import org.apache.storm.generated.AggLevel;
 import org.apache.storm.metrics2.store.Aggregation;
 import org.apache.storm.metrics2.store.MetricException;
 import org.apache.storm.metrics2.store.MetricResult;
@@ -2503,144 +2505,150 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     public StormStats getStats(StatsSpec spec) {
         LOG.info("Getting stats for spec {}", spec);
         StormStats result = new StormStats();
-
         List<Window> windows = spec.get_windows();
         windows = windows == null ? new ArrayList<Window>() : windows;
         String topologyId = spec.get_topology_id();
         String component = spec.get_component();
         String executorId = spec.get_executor_id();
         List<String> metrics = spec.get_metrics();
-        StatsStoreOperation op = spec.get_op();
-
-        if (windows.size() == 0){
-            // default to all time
-            windows.add(Window.ALL);
-        }
 
         Aggregation agg = new Aggregation();
-        agg.filterAggLevel("rt");
-
-        Aggregation aggAllTime = new Aggregation();
-        aggAllTime.filterAggLevel("hourly");
-
-        MetricStore store = this.metricsStore;
-       
         if (topologyId != null){
             agg.filterTopo(topologyId); 
-            aggAllTime.filterTopo(topologyId); 
         }
         if (component != null) {
             agg.filterComp(component); 
-            aggAllTime.filterComp(component); 
         }
 
-        long startTime = 0;
-        long endTime = 0;
-        // TODO-AB: switch over windows and set start/end time
-
-        Long all_time = 0L;
-        Long ten_mins_ago = Time.deltaMs(10*60*1000);
-        Long three_hrs_ago = Time.deltaMs(3*3600*1000);
-        Long one_day_ago = Time.deltaMs(24*3600*1000);
-
-        StormWindowedStats allTimeStats = new StormWindowedStats();
-        allTimeStats.set_window (Window.ALL);
-
-        StormWindowedStats tenMinsStats = new StormWindowedStats();
-        tenMinsStats.set_window (Window.TEN_MIN);
-
-        StormWindowedStats threeHrsStats = new StormWindowedStats();
-        threeHrsStats.set_window (Window.THREE_HR);
-
-        StormWindowedStats oneDayStats = new StormWindowedStats();
-        oneDayStats.set_window (Window.ONE_DAY);
-
-        Window window = windows.get(0);
-
-        if (window == Window.ALL){
-            // no time boundaries
-            aggAllTime.filterTime(all_time, null);
-            agg.filterTime(ten_mins_ago, null);
-            agg.filterTime(three_hrs_ago, null);
-            agg.filterTime(one_day_ago, null);
-
-            result.add_to_windowed_stats(allTimeStats);
-            result.add_to_windowed_stats(tenMinsStats);
-            result.add_to_windowed_stats(threeHrsStats);
-            result.add_to_windowed_stats(oneDayStats);
-
-        } else if (window == Window.TEN_MIN) {
-            agg.filterTime(ten_mins_ago, null);
-            result.add_to_windowed_stats(tenMinsStats);
-        } else if (window == Window.THREE_HR) {
-            agg.filterTime(three_hrs_ago, null);
-            result.add_to_windowed_stats(threeHrsStats);
-        } else if (window == Window.ONE_DAY) {
-            agg.filterTime(one_day_ago, null);
-            result.add_to_windowed_stats(oneDayStats);
-        }
-
-        for (String metric : metrics) {
-            if (metric != null) {
-                agg.filterMetric(metric); 
-                aggAllTime.filterMetric(metric);
-            }   
-        }
-
-        try {
-            MetricResult metricResult = null;
-            if (op == StatsStoreOperation.SUM) {
-                metricResult = agg.sum(store);
-            } else if (op == StatsStoreOperation.MIN) {
-                metricResult = agg.min(store);
-            } else if (op == StatsStoreOperation.AVG) {
-                metricResult = agg.mean(store);
-            } else if (op == StatsStoreOperation.MAX) {
-                metricResult = agg.max(store);
-            } else {
-                LOG.error ("I can't handle that operation {}", op);
+        if (metrics != null){
+            for (String metric : metrics) {
+                if (metric != null) {
+                    agg.filterMetric(metric); 
+                }   
             }
+        }
 
-            for (String metric : metricResult.getMetricNames()){
-                for (TimeRange tr : metricResult.getTimeRanges(metric)){
+        StatsStoreOperation op = spec.get_op();
+        if (op == StatsStoreOperation.SERIES) {
+            long startTime = spec.get_start_time_sec();
+            long endTime = spec.get_end_time_sec();
 
-                    Double value = metricResult.getValueFor(metric, tr);
-                    if (tr.startTime == ten_mins_ago){
-                        tenMinsStats.put_to_values (metric, value);
-                    } else if (tr.startTime == three_hrs_ago) {
-                        threeHrsStats.put_to_values (metric, value);
-                    } else if (tr.startTime == one_day_ago) {
-                        oneDayStats.put_to_values (metric, value);
+            //TODO: carry through the AggLevel
+            agg.filterAggLevel(0); //spec.get_min_agg_level() == AggLevel.RAW ? "rt" : "hourly");
+            agg.filterTime(startTime, endTime, Window.ALL /*TODO.. ugly I have to provide a window*/);
+
+            StormSeriesStats seriesStats = new StormSeriesStats();
+            result.set_series_stats(seriesStats);
+
+            List<Long> t = new ArrayList<Long>();
+            Map<String, Map<Long, Double>> d = new HashMap<String, Map<Long, Double>>();
+            // executor ->timeseires
+            try { 
+                agg.raw(metricsStore, (metric, timeRanges) -> {
+                    String id = metric.id();
+                    Map<Long, Double> tseries = null;
+                    if (!d.containsKey(id)){
+                        tseries = new HashMap<Long, Double>();
+                        d.put(id, tseries);
+                    } else {
+                        tseries = d.get(id);
                     }
-                }
+                    System.out.println(metric.getTimeStamp());
+                    tseries.put(metric.getTimeStamp(), metric.getValue());
+                    long lastTime = t.size() > 0 ? t.get(t.size()-1) : 0L;
+                    if (metric.getTimeStamp() != lastTime){
+                        t.add(metric.getTimeStamp());
+                        lastTime = metric.getTimeStamp();
+                    }
+                });
+            } catch (Exception e){
+                LOG.error("Bad metrics", e);
             }
 
-            if (window == Window.ALL) {
-                // all time result
-                LOG.info("Computing metrics using aggregating store");
-                MetricResult allMetricResult = null;
+            seriesStats.set_times (t);
+            seriesStats.set_values (d);
+
+        } else {
+            if (windows.size() == 0){
+                // default to all time
+                windows.add(Window.ALL);
+            }
+            // TODO-AB: switch over windows and set start/end time
+            Long all_time = 0L;
+            Long ten_mins_ago = Time.deltaMs(10*60*1000);
+            Long three_hrs_ago = Time.deltaMs(3*3600*1000);
+            Long one_day_ago = Time.deltaMs(24*3600*1000);
+
+            StormWindowedStats allTimeStats = new StormWindowedStats();
+            allTimeStats.set_window (Window.ALL);
+
+            StormWindowedStats tenMinsStats = new StormWindowedStats();
+            tenMinsStats.set_window (Window.TEN_MIN);
+
+            StormWindowedStats threeHrsStats = new StormWindowedStats();
+            threeHrsStats.set_window (Window.THREE_HR);
+
+            StormWindowedStats oneDayStats = new StormWindowedStats();
+            oneDayStats.set_window (Window.ONE_DAY);
+
+            Window window = windows.get(0);
+
+            if (window == Window.ALL){
+                // no time boundaries
+                agg.filterTime(all_time, null, Window.ALL);
+                agg.filterTime(ten_mins_ago, null, Window.TEN_MIN);
+                agg.filterTime(three_hrs_ago, null, Window.THREE_HR);
+                agg.filterTime(one_day_ago, null, Window.ONE_DAY);
+
+                result.add_to_windowed_stats(allTimeStats);
+                result.add_to_windowed_stats(tenMinsStats);
+                result.add_to_windowed_stats(threeHrsStats);
+                result.add_to_windowed_stats(oneDayStats);
+
+            } else if (window == Window.TEN_MIN) {
+                agg.filterTime(ten_mins_ago, null, Window.TEN_MIN);
+                result.add_to_windowed_stats(tenMinsStats);
+            } else if (window == Window.THREE_HR) {
+                agg.filterTime(three_hrs_ago, null, Window.THREE_HR);
+                result.add_to_windowed_stats(threeHrsStats);
+            } else if (window == Window.ONE_DAY) {
+                agg.filterTime(one_day_ago, null, Window.ONE_DAY);
+                result.add_to_windowed_stats(oneDayStats);
+            }
+
+
+            try {
+                MetricResult metricResult = null;
                 if (op == StatsStoreOperation.SUM) {
-                    allMetricResult = aggAllTime.sum(aggregatingMetricsStore);
+                    metricResult = agg.sum(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.MIN) {
-                    allMetricResult = aggAllTime.min(aggregatingMetricsStore);
+                    metricResult = agg.min(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.AVG) {
-                    allMetricResult = aggAllTime.mean(aggregatingMetricsStore);
+                    metricResult = agg.mean(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.MAX) {
-                    allMetricResult = aggAllTime.max(aggregatingMetricsStore);
+                    metricResult = agg.max(aggregatingMetricsStore);
                 } else {
                     LOG.error ("I can't handle that operation {}", op);
                 }
 
-                for (String metric : allMetricResult.getMetricNames()){
-                    for (TimeRange tr : allMetricResult.getTimeRanges(metric)){
-                        LOG.info("time range {}", tr);
-                        Double value = allMetricResult.getValueFor(metric, tr);
-                        allTimeStats.put_to_values (metric, value);
+                for (String metric : metricResult.getMetricNames()){
+                    for (TimeRange tr : metricResult.getTimeRanges(metric)){
+
+                        Double value = metricResult.getValueFor(metric, tr);
+                        if (tr.window == Window.TEN_MIN){
+                            tenMinsStats.put_to_values (metric, value);
+                        } else if (tr.window == Window.THREE_HR) {
+                            threeHrsStats.put_to_values (metric, value);
+                        } else if (tr.window == Window.ONE_DAY) {
+                            oneDayStats.put_to_values (metric, value);
+                        } else {
+                            allTimeStats.put_to_values (metric, value);
+                        }
                     }
                 }
+            } catch (MetricException exp){
+                LOG.error ("Exception computing metrics", exp);
             }
-        } catch (MetricException exp){
-            LOG.error ("Exception computing metrics", exp);
         }
 
         return result;

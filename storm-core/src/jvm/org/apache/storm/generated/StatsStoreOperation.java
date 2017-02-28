@@ -32,7 +32,8 @@ public enum StatsStoreOperation implements org.apache.thrift.TEnum {
   SUM(0),
   AVG(1),
   MIN(2),
-  MAX(3);
+  MAX(3),
+  SERIES(4);
 
   private final int value;
 
@@ -61,6 +62,8 @@ public enum StatsStoreOperation implements org.apache.thrift.TEnum {
         return MIN;
       case 3:
         return MAX;
+      case 4:
+        return SERIES;
       default:
         return null;
     }

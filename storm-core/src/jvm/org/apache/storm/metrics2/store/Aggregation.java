@@ -21,6 +21,10 @@ package org.apache.storm.metrics2.store;
 import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+
+//TODO: this should be an internal enum
+import org.apache.storm.generated.Window;
 
 public class Aggregation {
 
@@ -59,20 +63,29 @@ public class Aggregation {
         this.settings.put(StringKeywords.component, comp);
     }
 
-    public void filterAggLevel(String comp) {
+    public void filterAggLevel(Integer comp) {
+        // TODO: ugly, make this an enum or something until it hits the store
         this.settings.put(StringKeywords.aggLevel, comp);
     }
 
-    public void filterTime(Long timeStart, Long timeEnd) {
+    public HashMap<String, Object> getSettings(){
+        return this.settings;
+    }
+
+    public void filterTime(Long timeStart, Long timeEnd, Window window) {
         HashSet<TimeRange> timeRangeSet = (HashSet<TimeRange>)this.settings.get(StringKeywords.timeRangeSet);
         if (timeRangeSet == null){
             timeRangeSet = new HashSet<TimeRange>();
             this.settings.put(StringKeywords.timeRangeSet, timeRangeSet);
         }
-        TimeRange timeRange = new TimeRange(timeStart, timeEnd);
+        TimeRange timeRange = new TimeRange(timeStart, timeEnd, window);
         timeRangeSet.add(timeRange);
     }
 
+    public void raw(MetricStore store, IAggregator agg) throws MetricException {
+        MetricResult result = new MetricResult();
+        store.scan (settings, agg);
+    }
     // Aggregations
 
     public MetricResult sum(MetricStore store) throws MetricException {

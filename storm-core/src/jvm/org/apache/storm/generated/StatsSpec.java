@@ -61,6 +61,9 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
   private static final org.apache.thrift.protocol.TField COMPONENT_FIELD_DESC = new org.apache.thrift.protocol.TField("component", org.apache.thrift.protocol.TType.STRING, (short)4);
   private static final org.apache.thrift.protocol.TField EXECUTOR_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("executor_id", org.apache.thrift.protocol.TType.STRING, (short)5);
   private static final org.apache.thrift.protocol.TField METRICS_FIELD_DESC = new org.apache.thrift.protocol.TField("metrics", org.apache.thrift.protocol.TType.LIST, (short)6);
+  private static final org.apache.thrift.protocol.TField START_TIME_SEC_FIELD_DESC = new org.apache.thrift.protocol.TField("start_time_sec", org.apache.thrift.protocol.TType.I64, (short)7);
+  private static final org.apache.thrift.protocol.TField END_TIME_SEC_FIELD_DESC = new org.apache.thrift.protocol.TField("end_time_sec", org.apache.thrift.protocol.TType.I64, (short)8);
+  private static final org.apache.thrift.protocol.TField MIN_AGG_LEVEL_FIELD_DESC = new org.apache.thrift.protocol.TField("min_agg_level", org.apache.thrift.protocol.TType.I32, (short)9);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -74,6 +77,9 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
   private String component; // optional
   private String executor_id; // optional
   private List<String> metrics; // optional
+  private long start_time_sec; // optional
+  private long end_time_sec; // optional
+  private AggLevel min_agg_level; // optional
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
@@ -86,7 +92,14 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     TOPOLOGY_ID((short)3, "topology_id"),
     COMPONENT((short)4, "component"),
     EXECUTOR_ID((short)5, "executor_id"),
-    METRICS((short)6, "metrics");
+    METRICS((short)6, "metrics"),
+    START_TIME_SEC((short)7, "start_time_sec"),
+    END_TIME_SEC((short)8, "end_time_sec"),
+    /**
+     * 
+     * @see AggLevel
+     */
+    MIN_AGG_LEVEL((short)9, "min_agg_level");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -113,6 +126,12 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
           return EXECUTOR_ID;
         case 6: // METRICS
           return METRICS;
+        case 7: // START_TIME_SEC
+          return START_TIME_SEC;
+        case 8: // END_TIME_SEC
+          return END_TIME_SEC;
+        case 9: // MIN_AGG_LEVEL
+          return MIN_AGG_LEVEL;
         default:
           return null;
       }
@@ -153,7 +172,10 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
   }
 
   // isset id assignments
-  private static final _Fields optionals[] = {_Fields.OP,_Fields.WINDOWS,_Fields.TOPOLOGY_ID,_Fields.COMPONENT,_Fields.EXECUTOR_ID,_Fields.METRICS};
+  private static final int __START_TIME_SEC_ISSET_ID = 0;
+  private static final int __END_TIME_SEC_ISSET_ID = 1;
+  private byte __isset_bitfield = 0;
+  private static final _Fields optionals[] = {_Fields.OP,_Fields.WINDOWS,_Fields.TOPOLOGY_ID,_Fields.COMPONENT,_Fields.EXECUTOR_ID,_Fields.METRICS,_Fields.START_TIME_SEC,_Fields.END_TIME_SEC,_Fields.MIN_AGG_LEVEL};
   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
   static {
     Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
@@ -171,6 +193,12 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     tmpMap.put(_Fields.METRICS, new org.apache.thrift.meta_data.FieldMetaData("metrics", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
         new org.apache.thrift.meta_data.ListMetaData(org.apache.thrift.protocol.TType.LIST, 
             new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING))));
+    tmpMap.put(_Fields.START_TIME_SEC, new org.apache.thrift.meta_data.FieldMetaData("start_time_sec", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
+        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64)));
+    tmpMap.put(_Fields.END_TIME_SEC, new org.apache.thrift.meta_data.FieldMetaData("end_time_sec", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
+        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64)));
+    tmpMap.put(_Fields.MIN_AGG_LEVEL, new org.apache.thrift.meta_data.FieldMetaData("min_agg_level", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
+        new org.apache.thrift.meta_data.EnumMetaData(org.apache.thrift.protocol.TType.ENUM, AggLevel.class)));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(StatsSpec.class, metaDataMap);
   }
@@ -184,6 +212,7 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
    * Performs a deep copy on <i>other</i>.
    */
   public StatsSpec(StatsSpec other) {
+    __isset_bitfield = other.__isset_bitfield;
     if (other.is_set_op()) {
       this.op = other.op;
     }
@@ -207,6 +236,11 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       List<String> __this__metrics = new ArrayList<String>(other.metrics);
       this.metrics = __this__metrics;
     }
+    this.start_time_sec = other.start_time_sec;
+    this.end_time_sec = other.end_time_sec;
+    if (other.is_set_min_agg_level()) {
+      this.min_agg_level = other.min_agg_level;
+    }
   }
 
   public StatsSpec deepCopy() {
@@ -222,6 +256,11 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     this.component = null;
     this.executor_id = null;
     this.metrics = null;
+    set_start_time_sec_isSet(false);
+    this.start_time_sec = 0;
+    set_end_time_sec_isSet(false);
+    this.end_time_sec = 0;
+    this.min_agg_level = null;
   }
 
   /**
@@ -400,6 +439,81 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     }
   }
 
+  public long get_start_time_sec() {
+    return this.start_time_sec;
+  }
+
+  public void set_start_time_sec(long start_time_sec) {
+    this.start_time_sec = start_time_sec;
+    set_start_time_sec_isSet(true);
+  }
+
+  public void unset_start_time_sec() {
+    __isset_bitfield = EncodingUtils.clearBit(__isset_bitfield, __START_TIME_SEC_ISSET_ID);
+  }
+
+  /** Returns true if field start_time_sec is set (has been assigned a value) and false otherwise */
+  public boolean is_set_start_time_sec() {
+    return EncodingUtils.testBit(__isset_bitfield, __START_TIME_SEC_ISSET_ID);
+  }
+
+  public void set_start_time_sec_isSet(boolean value) {
+    __isset_bitfield = EncodingUtils.setBit(__isset_bitfield, __START_TIME_SEC_ISSET_ID, value);
+  }
+
+  public long get_end_time_sec() {
+    return this.end_time_sec;
+  }
+
+  public void set_end_time_sec(long end_time_sec) {
+    this.end_time_sec = end_time_sec;
+    set_end_time_sec_isSet(true);
+  }
+
+  public void unset_end_time_sec() {
+    __isset_bitfield = EncodingUtils.clearBit(__isset_bitfield, __END_TIME_SEC_ISSET_ID);
+  }
+
+  /** Returns true if field end_time_sec is set (has been assigned a value) and false otherwise */
+  public boolean is_set_end_time_sec() {
+    return EncodingUtils.testBit(__isset_bitfield, __END_TIME_SEC_ISSET_ID);
+  }
+
+  public void set_end_time_sec_isSet(boolean value) {
+    __isset_bitfield = EncodingUtils.setBit(__isset_bitfield, __END_TIME_SEC_ISSET_ID, value);
+  }
+
+  /**
+   * 
+   * @see AggLevel
+   */
+  public AggLevel get_min_agg_level() {
+    return this.min_agg_level;
+  }
+
+  /**
+   * 
+   * @see AggLevel
+   */
+  public void set_min_agg_level(AggLevel min_agg_level) {
+    this.min_agg_level = min_agg_level;
+  }
+
+  public void unset_min_agg_level() {
+    this.min_agg_level = null;
+  }
+
+  /** Returns true if field min_agg_level is set (has been assigned a value) and false otherwise */
+  public boolean is_set_min_agg_level() {
+    return this.min_agg_level != null;
+  }
+
+  public void set_min_agg_level_isSet(boolean value) {
+    if (!value) {
+      this.min_agg_level = null;
+    }
+  }
+
   public void setFieldValue(_Fields field, Object value) {
     switch (field) {
     case OP:
@@ -450,6 +564,30 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       }
       break;
 
+    case START_TIME_SEC:
+      if (value == null) {
+        unset_start_time_sec();
+      } else {
+        set_start_time_sec((Long)value);
+      }
+      break;
+
+    case END_TIME_SEC:
+      if (value == null) {
+        unset_end_time_sec();
+      } else {
+        set_end_time_sec((Long)value);
+      }
+      break;
+
+    case MIN_AGG_LEVEL:
+      if (value == null) {
+        unset_min_agg_level();
+      } else {
+        set_min_agg_level((AggLevel)value);
+      }
+      break;
+
     }
   }
 
@@ -472,6 +610,15 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
 
     case METRICS:
       return get_metrics();
+
+    case START_TIME_SEC:
+      return get_start_time_sec();
+
+    case END_TIME_SEC:
+      return get_end_time_sec();
+
+    case MIN_AGG_LEVEL:
+      return get_min_agg_level();
 
     }
     throw new IllegalStateException();
@@ -496,6 +643,12 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       return is_set_executor_id();
     case METRICS:
       return is_set_metrics();
+    case START_TIME_SEC:
+      return is_set_start_time_sec();
+    case END_TIME_SEC:
+      return is_set_end_time_sec();
+    case MIN_AGG_LEVEL:
+      return is_set_min_agg_level();
     }
     throw new IllegalStateException();
   }
@@ -567,6 +720,33 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
         return false;
     }
 
+    boolean this_present_start_time_sec = true && this.is_set_start_time_sec();
+    boolean that_present_start_time_sec = true && that.is_set_start_time_sec();
+    if (this_present_start_time_sec || that_present_start_time_sec) {
+      if (!(this_present_start_time_sec && that_present_start_time_sec))
+        return false;
+      if (this.start_time_sec != that.start_time_sec)
+        return false;
+    }
+
+    boolean this_present_end_time_sec = true && this.is_set_end_time_sec();
+    boolean that_present_end_time_sec = true && that.is_set_end_time_sec();
+    if (this_present_end_time_sec || that_present_end_time_sec) {
+      if (!(this_present_end_time_sec && that_present_end_time_sec))
+        return false;
+      if (this.end_time_sec != that.end_time_sec)
+        return false;
+    }
+
+    boolean this_present_min_agg_level = true && this.is_set_min_agg_level();
+    boolean that_present_min_agg_level = true && that.is_set_min_agg_level();
+    if (this_present_min_agg_level || that_present_min_agg_level) {
+      if (!(this_present_min_agg_level && that_present_min_agg_level))
+        return false;
+      if (!this.min_agg_level.equals(that.min_agg_level))
+        return false;
+    }
+
     return true;
   }
 
@@ -603,6 +783,21 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     list.add(present_metrics);
     if (present_metrics)
       list.add(metrics);
+
+    boolean present_start_time_sec = true && (is_set_start_time_sec());
+    list.add(present_start_time_sec);
+    if (present_start_time_sec)
+      list.add(start_time_sec);
+
+    boolean present_end_time_sec = true && (is_set_end_time_sec());
+    list.add(present_end_time_sec);
+    if (present_end_time_sec)
+      list.add(end_time_sec);
+
+    boolean present_min_agg_level = true && (is_set_min_agg_level());
+    list.add(present_min_agg_level);
+    if (present_min_agg_level)
+      list.add(min_agg_level.getValue());
 
     return list.hashCode();
   }
@@ -671,6 +866,36 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
     }
     if (is_set_metrics()) {
       lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.metrics, other.metrics);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
+    lastComparison = Boolean.valueOf(is_set_start_time_sec()).compareTo(other.is_set_start_time_sec());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (is_set_start_time_sec()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.start_time_sec, other.start_time_sec);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
+    lastComparison = Boolean.valueOf(is_set_end_time_sec()).compareTo(other.is_set_end_time_sec());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (is_set_end_time_sec()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.end_time_sec, other.end_time_sec);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
+    lastComparison = Boolean.valueOf(is_set_min_agg_level()).compareTo(other.is_set_min_agg_level());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (is_set_min_agg_level()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.min_agg_level, other.min_agg_level);
       if (lastComparison != 0) {
         return lastComparison;
       }
@@ -754,6 +979,28 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       }
       first = false;
     }
+    if (is_set_start_time_sec()) {
+      if (!first) sb.append(", ");
+      sb.append("start_time_sec:");
+      sb.append(this.start_time_sec);
+      first = false;
+    }
+    if (is_set_end_time_sec()) {
+      if (!first) sb.append(", ");
+      sb.append("end_time_sec:");
+      sb.append(this.end_time_sec);
+      first = false;
+    }
+    if (is_set_min_agg_level()) {
+      if (!first) sb.append(", ");
+      sb.append("min_agg_level:");
+      if (this.min_agg_level == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.min_agg_level);
+      }
+      first = false;
+    }
     sb.append(")");
     return sb.toString();
   }
@@ -773,6 +1020,8 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
 
   private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
     try {
+      // it doesn't seem like you should have to do this, but java serialization is wacky, and doesn't call the default constructor.
+      __isset_bitfield = 0;
       read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
     } catch (org.apache.thrift.TException te) {
       throw new java.io.IOException(te);
@@ -865,6 +1114,30 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
+          case 7: // START_TIME_SEC
+            if (schemeField.type == org.apache.thrift.protocol.TType.I64) {
+              struct.start_time_sec = iprot.readI64();
+              struct.set_start_time_sec_isSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
+          case 8: // END_TIME_SEC
+            if (schemeField.type == org.apache.thrift.protocol.TType.I64) {
+              struct.end_time_sec = iprot.readI64();
+              struct.set_end_time_sec_isSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
+          case 9: // MIN_AGG_LEVEL
+            if (schemeField.type == org.apache.thrift.protocol.TType.I32) {
+              struct.min_agg_level = org.apache.storm.generated.AggLevel.findByValue(iprot.readI32());
+              struct.set_min_agg_level_isSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
           default:
             org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
         }
@@ -934,6 +1207,23 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
           oprot.writeFieldEnd();
         }
       }
+      if (struct.is_set_start_time_sec()) {
+        oprot.writeFieldBegin(START_TIME_SEC_FIELD_DESC);
+        oprot.writeI64(struct.start_time_sec);
+        oprot.writeFieldEnd();
+      }
+      if (struct.is_set_end_time_sec()) {
+        oprot.writeFieldBegin(END_TIME_SEC_FIELD_DESC);
+        oprot.writeI64(struct.end_time_sec);
+        oprot.writeFieldEnd();
+      }
+      if (struct.min_agg_level != null) {
+        if (struct.is_set_min_agg_level()) {
+          oprot.writeFieldBegin(MIN_AGG_LEVEL_FIELD_DESC);
+          oprot.writeI32(struct.min_agg_level.getValue());
+          oprot.writeFieldEnd();
+        }
+      }
       oprot.writeFieldStop();
       oprot.writeStructEnd();
     }
@@ -970,7 +1260,16 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
       if (struct.is_set_metrics()) {
         optionals.set(5);
       }
-      oprot.writeBitSet(optionals, 6);
+      if (struct.is_set_start_time_sec()) {
+        optionals.set(6);
+      }
+      if (struct.is_set_end_time_sec()) {
+        optionals.set(7);
+      }
+      if (struct.is_set_min_agg_level()) {
+        optionals.set(8);
+      }
+      oprot.writeBitSet(optionals, 9);
       if (struct.is_set_op()) {
         oprot.writeI32(struct.op.getValue());
       }
@@ -1001,12 +1300,21 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
           }
         }
       }
+      if (struct.is_set_start_time_sec()) {
+        oprot.writeI64(struct.start_time_sec);
+      }
+      if (struct.is_set_end_time_sec()) {
+        oprot.writeI64(struct.end_time_sec);
+      }
+      if (struct.is_set_min_agg_level()) {
+        oprot.writeI32(struct.min_agg_level.getValue());
+      }
     }
 
     @Override
     public void read(org.apache.thrift.protocol.TProtocol prot, StatsSpec struct) throws org.apache.thrift.TException {
       TTupleProtocol iprot = (TTupleProtocol) prot;
-      BitSet incoming = iprot.readBitSet(6);
+      BitSet incoming = iprot.readBitSet(9);
       if (incoming.get(0)) {
         struct.op = org.apache.storm.generated.StatsStoreOperation.findByValue(iprot.readI32());
         struct.set_op_isSet(true);
@@ -1048,6 +1356,18 @@ public class StatsSpec implements org.apache.thrift.TBase<StatsSpec, StatsSpec._
           }
         }
         struct.set_metrics_isSet(true);
+      }
+      if (incoming.get(6)) {
+        struct.start_time_sec = iprot.readI64();
+        struct.set_start_time_sec_isSet(true);
+      }
+      if (incoming.get(7)) {
+        struct.end_time_sec = iprot.readI64();
+        struct.set_end_time_sec_isSet(true);
+      }
+      if (incoming.get(8)) {
+        struct.min_agg_level = org.apache.storm.generated.AggLevel.findByValue(iprot.readI32());
+        struct.set_min_agg_level_isSet(true);
       }
     }
   }

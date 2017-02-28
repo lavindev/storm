@@ -312,7 +312,7 @@ storm.metrics.reporters:
         class: "org.apache.storm.metrics2.reporters.StormPreparableReporter"
         daemons: 
             - "worker"
-        schedule.period: 10
+        schedule.period: 30
         schedule.period.units: "SECONDS"
         rate.units: "SECONDS"
         duration.units: "SECONDS"
