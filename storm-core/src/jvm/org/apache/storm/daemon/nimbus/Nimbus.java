@@ -2467,10 +2467,33 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     //THRIFT SERVER METHODS...
     @Override
     public void consumeWorkerStats(SupervisorWorkerStats supervisorWorkerStats){
-        // TODO-AB: the naming in the thrift object could be 1M times better
+        LOG.debug("Consuming worker stats {}", supervisorWorkerStats);
+
+        Map<String, Object> topoConf = null;
+        String lastTopoId = null;
+        if (supervisorWorkerStats.get_worker_stats() == null){
+            return;
+        }
+
+        String host = supervisorWorkerStats.get_supervisor_host();
+
         for (Entry<String, WorkerStats> ws : supervisorWorkerStats.get_worker_stats().entrySet()) {
             WorkerStats workerStats = ws.getValue();
             String topoId = workerStats.get_storm_id();
+            if (lastTopoId == null || !lastTopoId.equals(topoId)) {
+                try {
+                    topoConf = tryReadTopoConf(topoId, blobStore);
+                    lastTopoId = topoId;
+                } catch (NotAliveException ex){
+                    // not alive anymore
+                    continue;
+                } catch (Exception ex){
+                    // not likely
+                    continue;
+                }
+            }
+            String submitter = (String) topoConf.get(Config.TOPOLOGY_SUBMITTER_USER);
+
             Map<Long, LSWorkerStats> metrics = workerStats.get_metrics();
             if (metrics== null){
                 continue;
@@ -2494,6 +2517,8 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                     String metricName = keyParts[3];
                 
                     Metric m = new Metric(metricName, tstamp, execId, compId, stream, topoId, value);
+                    m.setHost(host);
+                    m.setOwner(submitter);
                     this.metricsStore.insert(m);
                     this.aggregatingMetricsStore.insert(m);
                 }
@@ -2534,7 +2559,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             long endTime = spec.get_end_time_sec();
 
             //TODO: carry through the AggLevel
-            agg.filterAggLevel(0); //spec.get_min_agg_level() == AggLevel.RAW ? "rt" : "hourly");
+            agg.filterAggLevel(1); //spec.get_min_agg_level() == AggLevel.RAW ? "rt" : "hourly");
             agg.filterTime(startTime, endTime, Window.ALL /*TODO.. ugly I have to provide a window*/);
 
             StormSeriesStats seriesStats = new StormSeriesStats();
@@ -2545,7 +2570,9 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             // executor ->timeseires
             try { 
                 agg.raw(metricsStore, (metric, timeRanges) -> {
-                    String id = metric.id();
+                    // TODO: instead of an id as a string, maybe we need something else here
+                    // perhaps it can be a tree, because that's what you need at the end
+                    String id = metric.toString();
                     Map<Long, Double> tseries = null;
                     if (!d.containsKey(id)){
                         tseries = new HashMap<Long, Double>();
@@ -2624,6 +2651,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                 } else if (op == StatsStoreOperation.MIN) {
                     metricResult = agg.min(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.AVG) {
+                    LOG.info("computing mean");
                     metricResult = agg.mean(aggregatingMetricsStore);
                 } else if (op == StatsStoreOperation.MAX) {
                     metricResult = agg.max(aggregatingMetricsStore);

@@ -10,7 +10,7 @@ class RocksDBBench {
 
     public static void main(String[] args){
         RocksDBBench bench = new RocksDBBench();
-        RocksDBConnector conn = new RocksDBConnector();
+        RocksDBStore conn = new RocksDBStore();
 
         HashMap<String, Object> conf = new HashMap<>();
         conf.put("storm.metrics2.store.rocksdb.create_if_missing", true);

@@ -42,22 +42,19 @@ import org.rocksdb.IndexType;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.FlushOptions;
 
-/**
- * This class implements the Storm Metrics Store Interface using RocksDB as a store
- * It contains preparing, insertion and scan methods to store and query metrics
- *
- * @author Austin Chung <achung13@illinois.edu>
- * @author Abhishek Deep Nigam <adn5327@gmail.com>
- * @author Naren Dasan <naren@narendasan.com>
- */
+public class RocksDBStore implements MetricStore {
+    private final static Logger LOG = LoggerFactory.getLogger(RocksDBStore.class);
 
-public class RocksDBConnector implements MetricStore {
-    private final static Logger LOG = LoggerFactory.getLogger(RocksDBConnector.class);
-    private RocksDB db;
-    private FlushOptions fops;
-    private Metadata meta;
+    //rocksjni instance
+    private RocksDB _db;
 
-    private byte[] metadataKey = new byte[] {(byte)0x00};
+    // options on how to flush db to disk
+    private FlushOptions _fops;
+
+    // metadata instance
+    private RocksDBSerializer _serializer;
+
+    private byte[] _metadataKey = new byte[] {(byte)0x00};
 
     /**
      * Implements the prepare method of the Metric Store, create RocksDB instance
@@ -138,13 +135,11 @@ public class RocksDBConnector implements MetricStore {
             options.setTableFormatConfig(tfc);
         }
 
-
-
-        this.db = null;
+        _db = null;
         try {
             // a factory method that returns a RocksDB instance
             String path = config.get("storm.metrics2.store.rocksdb.location").toString();
-            this.db = RocksDB.open(options, path);
+            _db = RocksDB.open(options, path);
             // do something
         } catch (RocksDBException e) {
             LOG.error("Error opening RockDB database", e);
@@ -152,30 +147,49 @@ public class RocksDBConnector implements MetricStore {
 
         LOG.info ("RocksDB Stats: {}", getStats());
 
+        _serializer = new RocksDBSerializer();
+
         // restore metadata
         LOG.info ("Restoring metadata");
-        Metadata.initialize();
         try {
-            Metadata.deserialize(this.db.get(metadataKey));
+            /*
+            scan(_topoMetadataKey, (key, value) -> {
+                _serializer.putToTopoMap(key, value);
+            });
+            scan(_streamMetadataKey, (key, value) -> {
+                _serializer.putToStreamMap(key, value);
+            });
+            scan(_hostMetadataKey, (key, value) -> {
+                _serializer.putToHostMap(key, value);
+            });
+            */
+            _serializer.deserializeTopoMap(_db.get(_topoMetadataKey));
+            _serializer.deserializeStreamMap(_db.get(_streamMetadataKey));
+            _serializer.deserializeHostMap(_db.get(_hostMetadataKey));
         } catch (RocksDBException e){
             LOG.error ("Failure to restore Metadata", e);
-        } catch (Exception ee){
-            LOG.error ("Blah", ee);
         }
-        LOG.info ("Metadata contents {}", Metadata.contents());
 
-        fops = new FlushOptions();
-        fops.setWaitForFlush(true);
+        LOG.info ("Metadata topos {}", _serializer.contents());
+
+        _fops = new FlushOptions();
+        _fops.setWaitForFlush(true);
     }
 
     public String getStats() {
         String stats = null;
         try {
-            stats = this.db.getProperty("rocksdb.stats");
+            stats = _db.getProperty("rocksdb.stats");
         } catch (RocksDBException e){
             LOG.error("Error getting RockDB database stats", e);
         }
         return stats;
+    }
+
+    private RocksDB getDb(Metric m) {
+        // given a metric and sharding config, return the rocksdb instance
+        // note: it might be a single instance, or it might be one per owner
+        return _db;
     }
 
     /**
@@ -185,17 +199,27 @@ public class RocksDBConnector implements MetricStore {
     @Override
     public void insert(Metric m) {
         try {
-            LOG.debug("inserting {}", m.toString());
-            byte[] key = m.getKeyBytes();
-            byte[] value = m.getValueBytes();
+            LOG.info("inserting {}", m.toString());
 
-            this.db.put(key, value);
-            byte[] metadataBytes = Metadata.serialize();
-            if (metadataBytes != null) {
-                LOG.info ("Writing new metadata {}", Metadata.contents());
-                this.db.put(metadataKey, metadataBytes);
+            RocksDB db = this.getDb(m);
+
+            // load metadata
+            if (!_serializer.metaInitialized(m)){
+                _serializer.deserializeMeta(m.getTopoIdStr(), db.get(_serializer.metadataKey(m)));
             }
-            this.db.flush(fops);
+
+            RocksDBSerializer.SerializationResult sr = _serializer.serialize(m);
+            db.put(sr.metricKey, sr.metricValue);
+
+            if (sr.metaValue != null) {
+                db.put(_metadataKey, sr.metaValue);
+            }
+
+            if (sr.metaTopoValue != null) {
+                db.put(_serializer.metadataKey(m), sr.metaTopoValue);
+            }
+
+            db.flush(_fops);
         } catch (RocksDBException e) {
             LOG.error("Error inserting into RocksDB", e);
         }
@@ -209,13 +233,13 @@ public class RocksDBConnector implements MetricStore {
     @Override
     public void scan(IAggregator agg) {
         long test = 0L;
-        RocksIterator iterator = this.db.newIterator();
-        for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
-            Metric metric = new Metric(iterator.key());
-            String prefixStr = Hex.encodeHexString(metric.getKeyBytes());
-            LOG.info("full scanning @ prefix {}", prefixStr);
-            metric.setValueFromBytes(iterator.value());
-            agg.agg(metric, null);
+        // TODO: for each topo stored in serializer
+        // iterate over it using its own db
+        for (String topoId : _serializer.getTopoIds()) {
+            LOG.debug("full scanning for topology {}", topoId);
+            HashMap<String, Object> settings = new HashMap<String, Object>();
+            settings.put(StringKeywords.topoId, topoId);
+            scan(settings, agg);
         }
     }
 
@@ -227,51 +251,60 @@ public class RocksDBConnector implements MetricStore {
      */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg){
-        //IF CAN CREATE PREFIX -- USE THAT
-        //ELSE DO FULL TABLE SCAN
-        byte[] prefix = Metric.createPrefix(settings);
+        // load metadata
+        // TODO: make function that can take the settings and decide
+        // whether we have enough info to find the db
+        // rather than construct a metric
+        Metric m = new RocksDBMetric();
+        String topoIdStr = (String)settings.get(StringKeywords.topoId);
+        m.setTopoIdStr(topoIdStr);
+
+        try { 
+            if (!_serializer.metaInitialized(m)){
+                _serializer.deserializeMeta(m.getTopoIdStr(), getDb(m).get(_serializer.metadataKey(m)));
+            }
+        } catch (RocksDBException ex){
+            LOG.error("Error loading metadata", ex);
+        }
+
+        byte[] prefix = _serializer.createPrefix(settings);
         if (prefix != null) {
             scan(prefix, settings, agg);
             return;
         }
-        LOG.info("Cannot obtain prefix, doing full RocksDB scan");
-
-        RocksIterator iterator = this.db.newIterator();
-
-        for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
-            //String key = new String(iterator.key());
-            //LOG.info("At key: {}", key);
-
-            Metric metric = new Metric(iterator.key());
-            Set<TimeRange> timeRanges = checkRequiredSettings(metric, settings);
-            boolean include = checkMetric(metric, settings);
-            if (timeRanges != null) {
-                if (include) {
-                    metric.setValueFromBytes(iterator.value());
-                    agg.agg(metric, timeRanges);
-                }
-            }
-        }
+        LOG.error("Couldn't obtain prefix");
     }
 
     @Override
     public void remove(HashMap<String, Object> settings) {
         // for each key we match, remove it
         scan(settings, (metric, timeRanges) -> {
-            try {
-                this.db.remove(metric.getKeyBytes());
-            } catch (RocksDBException e) {
-                LOG.error("Error removing from RocksDB", e);
-            }
+            remove(metric);
         });
     }
 
-    @Override
-    public boolean populateValue(Metric metric) {
-        byte[] key = metric.getKeyBytes();
+    public void remove(Metric keyToRemove) {
         try {
-            byte[] value = this.db.get(key);
-            metric.setValueFromBytes(value);
+            getDb(keyToRemove).remove(((RocksDBMetric)keyToRemove).getKey());
+        } catch (RocksDBException ex){
+            LOG.error("Exception while removing {}", keyToRemove);
+        }
+    }
+
+    @Override
+    public boolean populateValue(Metric m) {
+        RocksDB db = this.getDb(m);
+
+        try {
+            // load metadata
+            if (!_serializer.metaInitialized(m)){
+                _serializer.deserializeMeta(m.getTopoIdStr(), db.get(_serializer.metadataKey(m)));
+            }
+
+            RocksDBSerializer.SerializationResult sr = _serializer.serialize(m);
+
+            byte[] value = _db.get(sr.metricKey);
+            _serializer.populate(m, value);
             return value != null ? true : false;
         } catch (RocksDBException ex){
             LOG.error("Exception getting value:", ex);
@@ -291,7 +324,7 @@ public class RocksDBConnector implements MetricStore {
         ReadOptions ro = new ReadOptions();
         //ro.setPrefixSameAsStart(false);
         ro.setTotalOrderSeek(true);
-        RocksIterator iterator = this.db.newIterator(ro);
+        RocksIterator iterator = _db.newIterator(ro);
         iterator.seekToFirst();
         long startTime = System.nanoTime();
         long numRecords = 0;
@@ -299,17 +332,25 @@ public class RocksDBConnector implements MetricStore {
         for (iterator.seek(prefix); iterator.isValid(); iterator.next()) {
             //String key = new String(iterator.key());
 
-            Metric metric = new Metric(iterator.key());
-            LOG.info("Scanning key: {}", metric.toString());
+            Metric metric = _serializer.deserialize(iterator.key());
+            if (metric == null){
+                // if we can't deserialize (e.g. key type is metadata)
+                // we should be done
+                break;
+            }
+            LOG.debug("Scanning key: {}", metric.toString());
 
             Set<TimeRange> timeRanges = checkRequiredSettings(metric, settings);
-            boolean include = checkMetric(metric, settings);
             numScannedRecords++;
             if (timeRanges != null){ 
+                boolean include = checkMetric(metric, settings);
                 if (include) {
-                    LOG.info("Match key: {}", Hex.encodeHexString(iterator.key()));
+                    LOG.debug("Match key: {}", Hex.encodeHexString(iterator.key()));
                     numRecords++;
-                    metric.setValueFromBytes(iterator.value());
+                    if (!_serializer.metaInitialized(metric)){
+                        _serializer.deserializeMeta(metric.getTopoIdStr(), _serializer.metadataKey(metric));
+                    }
+                    _serializer.populate(metric, iterator.value());
                     agg.agg(metric, timeRanges);
                 }
             } else {
@@ -354,35 +395,39 @@ public class RocksDBConnector implements MetricStore {
      * the config specifies not to create the store
      */
     private boolean checkMetric(Metric possibleKey, HashMap<String, Object> settings)  {
-        LOG.debug("Checking {}", Hex.encodeHexString(possibleKey.getKeyBytes()));
+        LOG.info("Checking {}", possibleKey);
         if(settings.containsKey(StringKeywords.component) && 
-                !possibleKey.getCompId().equals(settings.get(StringKeywords.component))) {
+                !possibleKey.getCompName().equals(settings.get(StringKeywords.component))) {
+            LOG.info("Not the right component {}", possibleKey.getCompName());
             return false;
-        } else if(settings.containsKey(StringKeywords.metricName) && 
-                !possibleKey.getMetricName().equals(settings.get(StringKeywords.metricName))) {
+        } else if(settings.containsKey(StringKeywords.metricSet) && 
+                !((HashSet<String>)settings.get(StringKeywords.metricSet)).contains(possibleKey.getMetricName())) {
+            LOG.info("Not the right metric name {}", possibleKey.getMetricName());
             return false;
         }
         return true;
     }
 
     private Set<TimeRange> checkRequiredSettings(Metric possibleKey, HashMap<String, Object> settings)  {
-        LOG.debug("Checking {}", Hex.encodeHexString(possibleKey.getKeyBytes()));
-        LOG.info("compare agg level: {} {}", possibleKey.getAggLevel(), ((Integer)settings.get(StringKeywords.aggLevel)).byteValue());
+        LOG.debug("Checking metric {} key {}", possibleKey, Hex.encodeHexString(((RocksDBMetric)possibleKey).getKey()));
+        byte aggLevel = ((Integer)settings.get(StringKeywords.aggLevel)).byteValue();
+
+        LOG.info("compare agg level: {} {}", possibleKey.getAggLevel(), aggLevel);
+
         if(settings.containsKey(StringKeywords.aggLevel) && 
                 (possibleKey.getAggLevel() == null ||
                  !possibleKey.getAggLevel().equals(((Integer)settings.get(StringKeywords.aggLevel)).byteValue()))) {
             LOG.info("DOES NOT MATCH agg level: {} {}", possibleKey.getAggLevel(), ((Integer)settings.get(StringKeywords.aggLevel)).byteValue());
             return null;
         } else if(settings.containsKey(StringKeywords.topoId) && 
-                !possibleKey.getTopoId().equals(settings.get(StringKeywords.topoId))) {
-            LOG.info("DOES NOT MATCH topo {} {}", possibleKey.getTopoId(), settings.get(StringKeywords.topoId));
+                !possibleKey.getTopoIdStr().equals(settings.get(StringKeywords.topoId))) {
+            LOG.info("DOES NOT MATCH topo {} {}", possibleKey.getTopoIdStr(), settings.get(StringKeywords.topoId));
             return null;
         } else if(settings.containsKey(StringKeywords.timeRangeSet)){ 
             Set<TimeRange> timeRangeSet = (Set<TimeRange>)settings.get(StringKeywords.timeRangeSet);
             Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
             for (TimeRange tr : timeRangeSet){
                 Long tstamp = possibleKey.getTimeStamp();
-                LOG.info("tstamp {} tr {}", tstamp, tr);
                 if (tr.contains(tstamp)){
                     matchedTimeRanges.add(tr);
                 }
@@ -393,10 +438,6 @@ public class RocksDBConnector implements MetricStore {
             return matchedTimeRanges.size() > 0 ? matchedTimeRanges : null;
         }
         return null;
-    }
-
-    public void remove() {
-
     }
 
 }

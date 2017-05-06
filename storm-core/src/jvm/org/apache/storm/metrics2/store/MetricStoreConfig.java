@@ -45,7 +45,7 @@ public class MetricStoreConfig {
         }
 
         //Uses Utils.getString in storm
-        String storeClass = conf.get("storm.metrics2.store.connector_class").toString();
+        String storeClass = conf.get("storm.metrics2.store.class").toString();
         //Replace with Utils.newInstance
         MetricStore store;
         try {

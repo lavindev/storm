@@ -4,9 +4,11 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class MetricResult {
-    public double value;
-    public int count;
+    private final static Logger LOG = LoggerFactory.getLogger(MetricResult.class);
     private Map<String, Map<TimeRange, Double>> values;
     private Map<String, Map<TimeRange, Long>> counts;
 
@@ -32,23 +34,30 @@ public class MetricResult {
         return metricMap.get(tr);
     }
 
-    public void incCountFor(String metricName, TimeRange tr){
+    public void incCountFor(String metricName, TimeRange tr) {
+        incCountFor(metricName, tr, 1);
+    }
+    public void incCountFor(String metricName, TimeRange tr, long incBy){
+        LOG.info("incCountFor {} {}", metricName, tr);
         Map<TimeRange, Long> countMap = counts.get(metricName);
+        LOG.info("incCountFor countMap {} {} is {}", metricName, tr, countMap);
         if (countMap == null) {
             countMap = new HashMap<TimeRange, Long>();
             counts.put(metricName, countMap);
         }
         Long count = countMap.get(tr);
         count = count == null ? 0L : count;
-        countMap.put(tr, count++);
+        countMap.put(tr, count + incBy);
     }
 
     public Long getCountFor(String metricName, TimeRange tr){
+        LOG.info("getCountFor {} {}", metricName, tr);
         Map<TimeRange, Long> countMap = counts.get(metricName);
+        LOG.info("getCountFor countMap {} {} is {}", metricName, tr, countMap);
         if (countMap == null) {
             return null;
         }
-        return countMap.get(metricName);
+        return countMap.get(tr);
     }
 
     public Set<TimeRange> getTimeRanges(String metricName){

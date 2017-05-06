@@ -22,14 +22,6 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 
-/**
- * This interface defines the methods for preparing, storing and querying metrics
- *
- * @author Austin Chung <achung13@illinois.edu>
- * @author Abhishek Deep Nigam <adn5327@gmail.com>
- * @author Naren Dasan <naren@narendasan.com>
- */
-
 public interface MetricStore {
 
     /**

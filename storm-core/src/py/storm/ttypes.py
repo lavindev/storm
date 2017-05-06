@@ -12541,52 +12541,25 @@ class HBExecutionException(TException):
   def __ne__(self, other):
     return not (self == other)
 
-class StatsMetadata:
+class StatsMetadataTopo:
   """
   Attributes:
    - topo_ids
-   - comp_ids
-   - metric_ids
    - stream_ids
    - host_ids
-   - executor_ids
-   - rev_topo_ids
-   - rev_comp_ids
-   - rev_metric_ids
-   - rev_stream_ids
-   - rev_host_ids
-   - rev_executor_ids
   """
 
   thrift_spec = (
     None, # 0
     (1, TType.MAP, 'topo_ids', (TType.STRING,None,TType.I32,None), None, ), # 1
-    (2, TType.MAP, 'comp_ids', (TType.STRING,None,TType.I32,None), None, ), # 2
-    (3, TType.MAP, 'metric_ids', (TType.STRING,None,TType.I32,None), None, ), # 3
-    (4, TType.MAP, 'stream_ids', (TType.STRING,None,TType.I32,None), None, ), # 4
-    (5, TType.MAP, 'host_ids', (TType.STRING,None,TType.I32,None), None, ), # 5
-    (6, TType.MAP, 'executor_ids', (TType.STRING,None,TType.I32,None), None, ), # 6
-    (7, TType.MAP, 'rev_topo_ids', (TType.I32,None,TType.STRING,None), None, ), # 7
-    (8, TType.MAP, 'rev_comp_ids', (TType.I32,None,TType.STRING,None), None, ), # 8
-    (9, TType.MAP, 'rev_metric_ids', (TType.I32,None,TType.STRING,None), None, ), # 9
-    (10, TType.MAP, 'rev_stream_ids', (TType.I32,None,TType.STRING,None), None, ), # 10
-    (11, TType.MAP, 'rev_host_ids', (TType.I32,None,TType.STRING,None), None, ), # 11
-    (12, TType.MAP, 'rev_executor_ids', (TType.I32,None,TType.STRING,None), None, ), # 12
+    (2, TType.MAP, 'stream_ids', (TType.STRING,None,TType.I32,None), None, ), # 2
+    (3, TType.MAP, 'host_ids', (TType.STRING,None,TType.I32,None), None, ), # 3
   )
 
-  def __init__(self, topo_ids=None, comp_ids=None, metric_ids=None, stream_ids=None, host_ids=None, executor_ids=None, rev_topo_ids=None, rev_comp_ids=None, rev_metric_ids=None, rev_stream_ids=None, rev_host_ids=None, rev_executor_ids=None,):
+  def __init__(self, topo_ids=None, stream_ids=None, host_ids=None,):
     self.topo_ids = topo_ids
-    self.comp_ids = comp_ids
-    self.metric_ids = metric_ids
     self.stream_ids = stream_ids
     self.host_ids = host_ids
-    self.executor_ids = executor_ids
-    self.rev_topo_ids = rev_topo_ids
-    self.rev_comp_ids = rev_comp_ids
-    self.rev_metric_ids = rev_metric_ids
-    self.rev_stream_ids = rev_stream_ids
-    self.rev_host_ids = rev_host_ids
-    self.rev_executor_ids = rev_executor_ids
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -12610,122 +12583,146 @@ class StatsMetadata:
           iprot.skip(ftype)
       elif fid == 2:
         if ftype == TType.MAP:
-          self.comp_ids = {}
+          self.stream_ids = {}
           (_ktype818, _vtype819, _size817 ) = iprot.readMapBegin()
           for _i821 in xrange(_size817):
             _key822 = iprot.readString().decode('utf-8')
             _val823 = iprot.readI32()
-            self.comp_ids[_key822] = _val823
+            self.stream_ids[_key822] = _val823
           iprot.readMapEnd()
         else:
           iprot.skip(ftype)
       elif fid == 3:
         if ftype == TType.MAP:
-          self.metric_ids = {}
+          self.host_ids = {}
           (_ktype825, _vtype826, _size824 ) = iprot.readMapBegin()
           for _i828 in xrange(_size824):
             _key829 = iprot.readString().decode('utf-8')
             _val830 = iprot.readI32()
-            self.metric_ids[_key829] = _val830
+            self.host_ids[_key829] = _val830
           iprot.readMapEnd()
         else:
           iprot.skip(ftype)
-      elif fid == 4:
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('StatsMetadataTopo')
+    if self.topo_ids is not None:
+      oprot.writeFieldBegin('topo_ids', TType.MAP, 1)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.topo_ids))
+      for kiter831,viter832 in self.topo_ids.items():
+        oprot.writeString(kiter831.encode('utf-8'))
+        oprot.writeI32(viter832)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    if self.stream_ids is not None:
+      oprot.writeFieldBegin('stream_ids', TType.MAP, 2)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.stream_ids))
+      for kiter833,viter834 in self.stream_ids.items():
+        oprot.writeString(kiter833.encode('utf-8'))
+        oprot.writeI32(viter834)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    if self.host_ids is not None:
+      oprot.writeFieldBegin('host_ids', TType.MAP, 3)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.host_ids))
+      for kiter835,viter836 in self.host_ids.items():
+        oprot.writeString(kiter835.encode('utf-8'))
+        oprot.writeI32(viter836)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __hash__(self):
+    value = 17
+    value = (value * 31) ^ hash(self.topo_ids)
+    value = (value * 31) ^ hash(self.stream_ids)
+    value = (value * 31) ^ hash(self.host_ids)
+    return value
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class StatsMetadata:
+  """
+  Attributes:
+   - comp_ids
+   - metric_ids
+   - executor_ids
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.MAP, 'comp_ids', (TType.STRING,None,TType.I32,None), None, ), # 1
+    (2, TType.MAP, 'metric_ids', (TType.STRING,None,TType.I32,None), None, ), # 2
+    None, # 3
+    None, # 4
+    (5, TType.MAP, 'executor_ids', (TType.STRING,None,TType.I32,None), None, ), # 5
+  )
+
+  def __init__(self, comp_ids=None, metric_ids=None, executor_ids=None,):
+    self.comp_ids = comp_ids
+    self.metric_ids = metric_ids
+    self.executor_ids = executor_ids
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
         if ftype == TType.MAP:
-          self.stream_ids = {}
-          (_ktype832, _vtype833, _size831 ) = iprot.readMapBegin()
-          for _i835 in xrange(_size831):
-            _key836 = iprot.readString().decode('utf-8')
-            _val837 = iprot.readI32()
-            self.stream_ids[_key836] = _val837
+          self.comp_ids = {}
+          (_ktype838, _vtype839, _size837 ) = iprot.readMapBegin()
+          for _i841 in xrange(_size837):
+            _key842 = iprot.readString().decode('utf-8')
+            _val843 = iprot.readI32()
+            self.comp_ids[_key842] = _val843
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.MAP:
+          self.metric_ids = {}
+          (_ktype845, _vtype846, _size844 ) = iprot.readMapBegin()
+          for _i848 in xrange(_size844):
+            _key849 = iprot.readString().decode('utf-8')
+            _val850 = iprot.readI32()
+            self.metric_ids[_key849] = _val850
           iprot.readMapEnd()
         else:
           iprot.skip(ftype)
       elif fid == 5:
         if ftype == TType.MAP:
-          self.host_ids = {}
-          (_ktype839, _vtype840, _size838 ) = iprot.readMapBegin()
-          for _i842 in xrange(_size838):
-            _key843 = iprot.readString().decode('utf-8')
-            _val844 = iprot.readI32()
-            self.host_ids[_key843] = _val844
-          iprot.readMapEnd()
-        else:
-          iprot.skip(ftype)
-      elif fid == 6:
-        if ftype == TType.MAP:
           self.executor_ids = {}
-          (_ktype846, _vtype847, _size845 ) = iprot.readMapBegin()
-          for _i849 in xrange(_size845):
-            _key850 = iprot.readString().decode('utf-8')
-            _val851 = iprot.readI32()
-            self.executor_ids[_key850] = _val851
-          iprot.readMapEnd()
-        else:
-          iprot.skip(ftype)
-      elif fid == 7:
-        if ftype == TType.MAP:
-          self.rev_topo_ids = {}
-          (_ktype853, _vtype854, _size852 ) = iprot.readMapBegin()
-          for _i856 in xrange(_size852):
-            _key857 = iprot.readI32()
-            _val858 = iprot.readString().decode('utf-8')
-            self.rev_topo_ids[_key857] = _val858
-          iprot.readMapEnd()
-        else:
-          iprot.skip(ftype)
-      elif fid == 8:
-        if ftype == TType.MAP:
-          self.rev_comp_ids = {}
-          (_ktype860, _vtype861, _size859 ) = iprot.readMapBegin()
-          for _i863 in xrange(_size859):
-            _key864 = iprot.readI32()
-            _val865 = iprot.readString().decode('utf-8')
-            self.rev_comp_ids[_key864] = _val865
-          iprot.readMapEnd()
-        else:
-          iprot.skip(ftype)
-      elif fid == 9:
-        if ftype == TType.MAP:
-          self.rev_metric_ids = {}
-          (_ktype867, _vtype868, _size866 ) = iprot.readMapBegin()
-          for _i870 in xrange(_size866):
-            _key871 = iprot.readI32()
-            _val872 = iprot.readString().decode('utf-8')
-            self.rev_metric_ids[_key871] = _val872
-          iprot.readMapEnd()
-        else:
-          iprot.skip(ftype)
-      elif fid == 10:
-        if ftype == TType.MAP:
-          self.rev_stream_ids = {}
-          (_ktype874, _vtype875, _size873 ) = iprot.readMapBegin()
-          for _i877 in xrange(_size873):
-            _key878 = iprot.readI32()
-            _val879 = iprot.readString().decode('utf-8')
-            self.rev_stream_ids[_key878] = _val879
-          iprot.readMapEnd()
-        else:
-          iprot.skip(ftype)
-      elif fid == 11:
-        if ftype == TType.MAP:
-          self.rev_host_ids = {}
-          (_ktype881, _vtype882, _size880 ) = iprot.readMapBegin()
-          for _i884 in xrange(_size880):
-            _key885 = iprot.readI32()
-            _val886 = iprot.readString().decode('utf-8')
-            self.rev_host_ids[_key885] = _val886
-          iprot.readMapEnd()
-        else:
-          iprot.skip(ftype)
-      elif fid == 12:
-        if ftype == TType.MAP:
-          self.rev_executor_ids = {}
-          (_ktype888, _vtype889, _size887 ) = iprot.readMapBegin()
-          for _i891 in xrange(_size887):
-            _key892 = iprot.readI32()
-            _val893 = iprot.readString().decode('utf-8')
-            self.rev_executor_ids[_key892] = _val893
+          (_ktype852, _vtype853, _size851 ) = iprot.readMapBegin()
+          for _i855 in xrange(_size851):
+            _key856 = iprot.readString().decode('utf-8')
+            _val857 = iprot.readI32()
+            self.executor_ids[_key856] = _val857
           iprot.readMapEnd()
         else:
           iprot.skip(ftype)
@@ -12739,100 +12736,28 @@ class StatsMetadata:
       oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
       return
     oprot.writeStructBegin('StatsMetadata')
-    if self.topo_ids is not None:
-      oprot.writeFieldBegin('topo_ids', TType.MAP, 1)
-      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.topo_ids))
-      for kiter894,viter895 in self.topo_ids.items():
-        oprot.writeString(kiter894.encode('utf-8'))
-        oprot.writeI32(viter895)
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
     if self.comp_ids is not None:
-      oprot.writeFieldBegin('comp_ids', TType.MAP, 2)
+      oprot.writeFieldBegin('comp_ids', TType.MAP, 1)
       oprot.writeMapBegin(TType.STRING, TType.I32, len(self.comp_ids))
-      for kiter896,viter897 in self.comp_ids.items():
-        oprot.writeString(kiter896.encode('utf-8'))
-        oprot.writeI32(viter897)
+      for kiter858,viter859 in self.comp_ids.items():
+        oprot.writeString(kiter858.encode('utf-8'))
+        oprot.writeI32(viter859)
       oprot.writeMapEnd()
       oprot.writeFieldEnd()
     if self.metric_ids is not None:
-      oprot.writeFieldBegin('metric_ids', TType.MAP, 3)
+      oprot.writeFieldBegin('metric_ids', TType.MAP, 2)
       oprot.writeMapBegin(TType.STRING, TType.I32, len(self.metric_ids))
-      for kiter898,viter899 in self.metric_ids.items():
-        oprot.writeString(kiter898.encode('utf-8'))
-        oprot.writeI32(viter899)
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.stream_ids is not None:
-      oprot.writeFieldBegin('stream_ids', TType.MAP, 4)
-      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.stream_ids))
-      for kiter900,viter901 in self.stream_ids.items():
-        oprot.writeString(kiter900.encode('utf-8'))
-        oprot.writeI32(viter901)
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.host_ids is not None:
-      oprot.writeFieldBegin('host_ids', TType.MAP, 5)
-      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.host_ids))
-      for kiter902,viter903 in self.host_ids.items():
-        oprot.writeString(kiter902.encode('utf-8'))
-        oprot.writeI32(viter903)
+      for kiter860,viter861 in self.metric_ids.items():
+        oprot.writeString(kiter860.encode('utf-8'))
+        oprot.writeI32(viter861)
       oprot.writeMapEnd()
       oprot.writeFieldEnd()
     if self.executor_ids is not None:
-      oprot.writeFieldBegin('executor_ids', TType.MAP, 6)
+      oprot.writeFieldBegin('executor_ids', TType.MAP, 5)
       oprot.writeMapBegin(TType.STRING, TType.I32, len(self.executor_ids))
-      for kiter904,viter905 in self.executor_ids.items():
-        oprot.writeString(kiter904.encode('utf-8'))
-        oprot.writeI32(viter905)
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.rev_topo_ids is not None:
-      oprot.writeFieldBegin('rev_topo_ids', TType.MAP, 7)
-      oprot.writeMapBegin(TType.I32, TType.STRING, len(self.rev_topo_ids))
-      for kiter906,viter907 in self.rev_topo_ids.items():
-        oprot.writeI32(kiter906)
-        oprot.writeString(viter907.encode('utf-8'))
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.rev_comp_ids is not None:
-      oprot.writeFieldBegin('rev_comp_ids', TType.MAP, 8)
-      oprot.writeMapBegin(TType.I32, TType.STRING, len(self.rev_comp_ids))
-      for kiter908,viter909 in self.rev_comp_ids.items():
-        oprot.writeI32(kiter908)
-        oprot.writeString(viter909.encode('utf-8'))
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.rev_metric_ids is not None:
-      oprot.writeFieldBegin('rev_metric_ids', TType.MAP, 9)
-      oprot.writeMapBegin(TType.I32, TType.STRING, len(self.rev_metric_ids))
-      for kiter910,viter911 in self.rev_metric_ids.items():
-        oprot.writeI32(kiter910)
-        oprot.writeString(viter911.encode('utf-8'))
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.rev_stream_ids is not None:
-      oprot.writeFieldBegin('rev_stream_ids', TType.MAP, 10)
-      oprot.writeMapBegin(TType.I32, TType.STRING, len(self.rev_stream_ids))
-      for kiter912,viter913 in self.rev_stream_ids.items():
-        oprot.writeI32(kiter912)
-        oprot.writeString(viter913.encode('utf-8'))
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.rev_host_ids is not None:
-      oprot.writeFieldBegin('rev_host_ids', TType.MAP, 11)
-      oprot.writeMapBegin(TType.I32, TType.STRING, len(self.rev_host_ids))
-      for kiter914,viter915 in self.rev_host_ids.items():
-        oprot.writeI32(kiter914)
-        oprot.writeString(viter915.encode('utf-8'))
-      oprot.writeMapEnd()
-      oprot.writeFieldEnd()
-    if self.rev_executor_ids is not None:
-      oprot.writeFieldBegin('rev_executor_ids', TType.MAP, 12)
-      oprot.writeMapBegin(TType.I32, TType.STRING, len(self.rev_executor_ids))
-      for kiter916,viter917 in self.rev_executor_ids.items():
-        oprot.writeI32(kiter916)
-        oprot.writeString(viter917.encode('utf-8'))
+      for kiter862,viter863 in self.executor_ids.items():
+        oprot.writeString(kiter862.encode('utf-8'))
+        oprot.writeI32(viter863)
       oprot.writeMapEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
@@ -12844,18 +12769,9 @@ class StatsMetadata:
 
   def __hash__(self):
     value = 17
-    value = (value * 31) ^ hash(self.topo_ids)
     value = (value * 31) ^ hash(self.comp_ids)
     value = (value * 31) ^ hash(self.metric_ids)
-    value = (value * 31) ^ hash(self.stream_ids)
-    value = (value * 31) ^ hash(self.host_ids)
     value = (value * 31) ^ hash(self.executor_ids)
-    value = (value * 31) ^ hash(self.rev_topo_ids)
-    value = (value * 31) ^ hash(self.rev_comp_ids)
-    value = (value * 31) ^ hash(self.rev_metric_ids)
-    value = (value * 31) ^ hash(self.rev_stream_ids)
-    value = (value * 31) ^ hash(self.rev_host_ids)
-    value = (value * 31) ^ hash(self.rev_executor_ids)
     return value
 
   def __repr__(self):

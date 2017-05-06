@@ -217,9 +217,10 @@ public class StormPreparableReporter implements PreparableReporter {
                     //workerStats.put_to_metrics(key + "--means" , new Double(means));
                    // workerStats.put_to_metrics(key + "--median", new Double(median));
                    // workerStats.put_to_metrics(key + "--stddev", new Double(stddev));
-                   //for (int i = 0; i < vals.length; i++){
-                   //    workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
-                   //}
+                   
+                   for (int i = 0; i < vals.length; i++){
+                       workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
+                   }
                 }
             }
             if (timers != null) {
@@ -259,9 +260,9 @@ public class StormPreparableReporter implements PreparableReporter {
                     //workerStats.put_to_metrics(key + "--means" , new Double(means));
                     //workerStats.put_to_metrics(key + "--median", new Double(median));
                     //workerStats.put_to_metrics(key + "--stddev", new Double(stddev));
-                    //for (int i = 0; i < vals.length; i++){
-                    //    workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
-                    //}
+                    for (int i = 0; i < vals.length; i++){
+                        workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
+                    }
                 }
             }
             state.setWorkerStats(workerStats);

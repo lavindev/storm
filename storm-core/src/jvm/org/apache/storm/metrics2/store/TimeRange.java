@@ -1,5 +1,7 @@
 package org.apache.storm.metrics2.store;
 
+import java.util.Arrays;
+
 //TODO: this should be an internal enum
 import org.apache.storm.generated.Window;
 
@@ -30,5 +32,25 @@ public class TimeRange {
 
     public String toString(){
         return "start: " + this.startTime + " end: " + this.endTime + " window: " + this.window;
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(new Object[] {
+            startTime,
+            endTime,
+            window.getValue()
+        });
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null) {
+            return false;
+        }
+        TimeRange rhs = (TimeRange) o;
+        return rhs.startTime == this.startTime &&
+               rhs.endTime == this.endTime &&
+               rhs.window == this.window;
     }
 }

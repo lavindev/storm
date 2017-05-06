@@ -649,8 +649,9 @@ enum Window {
 
 enum AggLevel {
   RAW       = 0,
-  TEN_MIN   = 1,
-  HOUR      = 2
+  ONE_MIN   = 1,
+  TEN_MIN   = 2,
+  HOUR      = 3 
 }
 
 struct StatsSpec {
@@ -841,18 +842,14 @@ exception HBExecutionException {
   1: required string msg;
 }
 
-struct StatsMetadata {
+struct StatsMetadataTopo {
     1: optional map<string, i32> topo_ids;
-    2: optional map<string, i32> comp_ids;
-    3: optional map<string, i32> metric_ids;
-    4: optional map<string, i32> stream_ids;
-    5: optional map<string, i32> host_ids;
-    6: optional map<string, i32> executor_ids;
+    2: optional map<string, i32> stream_ids;
+    3: optional map<string, i32> host_ids;
+}
 
-    7: optional map<i32, string> rev_topo_ids;
-    8: optional map<i32, string> rev_comp_ids;
-    9: optional map<i32, string> rev_metric_ids;
-    10: optional map<i32, string> rev_stream_ids;
-    11: optional map<i32, string> rev_host_ids;
-    12: optional map<i32, string> rev_executor_ids;
+struct StatsMetadata {
+    1: optional map<string, i32> comp_ids;
+    2: optional map<string, i32> metric_ids;
+    5: optional map<string, i32> executor_ids;
 }

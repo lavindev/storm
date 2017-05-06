@@ -23,10 +23,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 //TODO: this should be an internal enum
 import org.apache.storm.generated.Window;
 
 public class Aggregation {
+    private final static Logger LOG = LoggerFactory.getLogger(Aggregation.class);
 
     // Key components
     private HashMap<String, Object> settings;
@@ -135,18 +139,27 @@ public class Aggregation {
         store.scan(settings, (metric, timeRanges) -> {
             String metricName = metric.getMetricName();
             for (TimeRange tr : timeRanges) {
+                // for an hourly bucket, this is a sum
                 Double value = metric.getValue();
+                //TODO: if (the metric isn't in the settings, don't include it in the result) {
+                //TODO:     // OR split the result into sums, avgs, maxes, etc. ==> easier
+                //TODO: }
                 value = value == null ? 0.0 : value;
                 Double prev = result.getValueFor(metricName, tr);
                 prev = prev == null ? 0.0 : prev;
                 result.setValueFor(metricName, tr, value + prev);
-                result.incCountFor(metricName, tr);
+                result.incCountFor(metricName, tr, metric.getCount());
             }
         });
+        LOG.info("try to perform avg for {}", result.getMetricNames());
         for (String metricName : result.getMetricNames()) {
+            LOG.info("try to perform avg for {}", metricName);
             for (TimeRange tr : result.getTimeRanges(metricName)){
+                LOG.info("try to perform avg for {} at {}", metricName, tr);
                 Long count = result.getCountFor(metricName, tr);
+                LOG.info("count for avg for {} at {} = {}", metricName, tr, count);
                 if (count != null && count > 0) {
+                    LOG.info("perform avg for {} {} {} / {} = {}", metricName, tr, result.getValueFor(metricName, tr), count);
                     result.setValueFor(metricName, tr, 
                             result.getValueFor(metricName, tr) / 
                             count);

@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Date;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +25,8 @@ public class AggregatingMetricStore implements MetricStore {
         this.store = store;
         _buckets = new ArrayList<Integer>();
         _buckets.add(60); // 60 minutes
+        _buckets.add(10); // 10 minutes
+        _buckets.add(1);  // 1 minutes
     }
 
     @Override
@@ -34,15 +39,18 @@ public class AggregatingMetricStore implements MetricStore {
 
     @Override 
     public void insert(Metric metric){
+        //TODO: Apparently the topo is getitng metrics, but they are not coming into this function, so trace back to nimbus
+        LOG.info("At insert {}", metric);
         // value is instantaneous
         Double value = metric.getValue();
+        Long timeInMs = metric.getTimeStamp();
         
         for (Integer bucket : _buckets) {
             LOG.debug("before inserting {} min bucket {} val: {}", bucket, metric.toString(), value);
             // get the hourly bucket for metric
-            Long timeInMs = metric.getTimeStamp();
             long msToBucket = 1000 * bucket * 60;
-            Long roundedToBucket = msToBucket * (timeInMs / msToBucket);
+            Long roundedToBucket = msToBucket * (long)Math.floor((double)timeInMs / msToBucket);
+            LOG.info("msToBucket {} timeInMs {} roundedToBucket {}", msToBucket, timeInMs, roundedToBucket);
             metric.setTimeStamp(roundedToBucket);
             metric.setAggLevel(bucket.byteValue());
 
@@ -76,17 +84,30 @@ public class AggregatingMetricStore implements MetricStore {
         }
 
         //TODO: RHS of this used to be a Math.ceil
-        long roundedStartTime = resolution * (long)Math.ceil((double)t.startTime/ resolution);
+        long roundedStartTime = resolution * (long)Math.floor((double)t.startTime/ resolution);
         long N = roundedEndTime - roundedStartTime;
 
         // t.startTime, roundedStartTime the start and stop for head end
         long head = roundedStartTime - t.startTime;
 
+        Date startTime= new Date(t.startTime);
+        Date endTimeDate= t.endTime != null? new Date(t.endTime) : null;
+        Date roundedEndTimeDate = new Date(roundedEndTime);
+        Date roundedStartTimeDate = new Date(roundedStartTime);
+
+        DateFormat format = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
         LOG.info ("num buckets {}, resolution (ms) {}, start time {}, end time {} end time (rounded) {}\n" +
                   "head ms {} head start {} head end {}\n tail ms {} tail start {} tail end {}", 
-                N/resolution, resolution, t.startTime, t.endTime, roundedEndTime,
-                head, t.startTime, roundedStartTime,
-                tail, endTimeAtResolution, t.endTime);
+                N/resolution, resolution, 
+                format.format(startTime), 
+                endTimeDate != null ? format.format(endTimeDate) : null, 
+                format.format(roundedEndTimeDate),
+                head, 
+                format.format(startTime), 
+                format.format(roundedStartTimeDate),
+                tail, 
+                endTimeAtResolution, 
+                endTimeDate != null ? format.format(endTimeDate) : null);
         return new Long[] {
             t.startTime,
             roundedStartTime,
@@ -97,15 +118,11 @@ public class AggregatingMetricStore implements MetricStore {
 
     long getFiner(long res){
         if (res == 60L) {
-            return 0L;
+            return 10L;
+        } else if (res == 10L) {
+            return 1L;
         }
         return 0L;
-        //   //    return 10L;
-        //   //case 10L:
-        //   //    return 1L;
-        //   default:
-        //       return 0L;
-        //
     }
 
     public void _scan(HashMap<String, Object> settings, IAggregator agg, TimeRange t, long res) {

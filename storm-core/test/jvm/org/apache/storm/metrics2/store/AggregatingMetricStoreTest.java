@@ -51,13 +51,14 @@ public class AggregatingMetricStoreTest {
         Aggregation agg = new Aggregation();
         agg.filterTime(1L, 100L, Window.ALL);
         Map settings = agg.getSettings();
-        byte[] prefix = Metric.createPrefix(settings);
+        RocksDBSerializer serializer = new RocksDBSerializer();
+        byte[] prefix = serializer.createPrefix(settings);
         System.out.println("prefix is " + Hex.encodeHexString(prefix));
     }
 
     @Test
     public void testInsertRetrieval() {
-        RocksDBConnector c = new RocksDBConnector();
+        RocksDBStore c = new RocksDBStore();
         HashMap<String, String> config = new HashMap<String, String>();
         config.put("storm.metrics2.store.rocksdb.location", "/tmp/testing_rocksdb");
         config.put("storm.metrics2.store.rocksdb.create_if_missing", "true");

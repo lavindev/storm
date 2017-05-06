@@ -19449,14 +19449,14 @@ public class Nimbus {
             case 0: // SUCCESS
               if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
                 {
-                  org.apache.thrift.protocol.TList _list1028 = iprot.readListBegin();
-                  struct.success = new ArrayList<ProfileRequest>(_list1028.size);
-                  ProfileRequest _elem1029;
-                  for (int _i1030 = 0; _i1030 < _list1028.size; ++_i1030)
+                  org.apache.thrift.protocol.TList _list968 = iprot.readListBegin();
+                  struct.success = new ArrayList<ProfileRequest>(_list968.size);
+                  ProfileRequest _elem969;
+                  for (int _i970 = 0; _i970 < _list968.size; ++_i970)
                   {
-                    _elem1029 = new ProfileRequest();
-                    _elem1029.read(iprot);
-                    struct.success.add(_elem1029);
+                    _elem969 = new ProfileRequest();
+                    _elem969.read(iprot);
+                    struct.success.add(_elem969);
                   }
                   iprot.readListEnd();
                 }
@@ -19482,9 +19482,9 @@ public class Nimbus {
           oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
           {
             oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.success.size()));
-            for (ProfileRequest _iter1031 : struct.success)
+            for (ProfileRequest _iter971 : struct.success)
             {
-              _iter1031.write(oprot);
+              _iter971.write(oprot);
             }
             oprot.writeListEnd();
           }
@@ -19515,9 +19515,9 @@ public class Nimbus {
         if (struct.is_set_success()) {
           {
             oprot.writeI32(struct.success.size());
-            for (ProfileRequest _iter1032 : struct.success)
+            for (ProfileRequest _iter972 : struct.success)
             {
-              _iter1032.write(oprot);
+              _iter972.write(oprot);
             }
           }
         }
@@ -19529,14 +19529,14 @@ public class Nimbus {
         BitSet incoming = iprot.readBitSet(1);
         if (incoming.get(0)) {
           {
-            org.apache.thrift.protocol.TList _list1033 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-            struct.success = new ArrayList<ProfileRequest>(_list1033.size);
-            ProfileRequest _elem1034;
-            for (int _i1035 = 0; _i1035 < _list1033.size; ++_i1035)
+            org.apache.thrift.protocol.TList _list973 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+            struct.success = new ArrayList<ProfileRequest>(_list973.size);
+            ProfileRequest _elem974;
+            for (int _i975 = 0; _i975 < _list973.size; ++_i975)
             {
-              _elem1034 = new ProfileRequest();
-              _elem1034.read(iprot);
-              struct.success.add(_elem1034);
+              _elem974 = new ProfileRequest();
+              _elem974.read(iprot);
+              struct.success.add(_elem974);
             }
           }
           struct.set_success_isSet(true);
