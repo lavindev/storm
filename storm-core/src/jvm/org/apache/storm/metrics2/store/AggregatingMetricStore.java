@@ -31,31 +31,36 @@ public class AggregatingMetricStore implements MetricStore {
 
     @Override
     public void prepare(Map config){
-        //TODO: I don't think this isgetting called
-        if (config.containsKey("storm.metrics2.store.aggregation_buckets")) {
-            _buckets = (List<Integer>)config.get("storm.metrics2.store.aggregation_buckets");
-        }
+        // For now, nothing to configure
     }
 
     @Override 
     public void insert(Metric metric){
-        //TODO: Apparently the topo is getitng metrics, but they are not coming into this function, so trace back to nimbus
-        LOG.info("At insert {}", metric);
-        // value is instantaneous
+        LOG.debug("Inserting {}", metric);
+        store.insert(metric);
+
+        // transform metric to insert in aggregating buckets
+
+        // incoming value is instantaneous
         Double value = metric.getValue();
         Long timeInMs = metric.getTimeStamp();
-        
+       
+        // foreach bucket, pull the existing aggregation and update it with
+        // the new value
         for (Integer bucket : _buckets) {
-            LOG.debug("before inserting {} min bucket {} val: {}", bucket, metric.toString(), value);
-            // get the hourly bucket for metric
+            // get the bucket in millis
             long msToBucket = 1000 * bucket * 60;
+
+            // the time for which this metric value applies to
             Long roundedToBucket = msToBucket * (long)Math.floor((double)timeInMs / msToBucket);
-            LOG.info("msToBucket {} timeInMs {} roundedToBucket {}", msToBucket, timeInMs, roundedToBucket);
             metric.setTimeStamp(roundedToBucket);
+
             metric.setAggLevel(bucket.byteValue());
 
+            // using the metric reference, populate it with what was in store for the bucket
             store.populateValue(metric); 
-            LOG.debug("after populating {} min bucket {} val: {}", bucket, metric.toString(), value);
+
+            // then apply the new value
             metric.updateAverage(value);
             LOG.debug("inserting {} min bucket {}", bucket, metric.toString());
             store.insert(metric);
@@ -64,10 +69,11 @@ public class AggregatingMetricStore implements MetricStore {
 
     @Override 
     public void scan(IAggregator agg){
+        //TODO: implement or remove
         store.scan(agg);
     }
 
-    public Long[] bucketize(TimeRange t, long resolution) {
+    public Long[] bucketize(TimeRange t, int resolution) {
         // we go until endTime. If endTime is null, we go until now
         boolean truncateTail = t.endTime != null;
         long endTime = t.endTime == null ? System.currentTimeMillis() : t.endTime;
@@ -83,7 +89,6 @@ public class AggregatingMetricStore implements MetricStore {
             tail = t.endTime - endTimeAtResolution;
         }
 
-        //TODO: RHS of this used to be a Math.ceil
         long roundedStartTime = resolution * (long)Math.floor((double)t.startTime/ resolution);
         long N = roundedEndTime - roundedStartTime;
 
@@ -96,6 +101,7 @@ public class AggregatingMetricStore implements MetricStore {
         Date roundedStartTimeDate = new Date(roundedStartTime);
 
         DateFormat format = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        //TODO: simplify this
         LOG.info ("num buckets {}, resolution (ms) {}, start time {}, end time {} end time (rounded) {}\n" +
                   "head ms {} head start {} head end {}\n tail ms {} tail start {} tail end {}", 
                 N/resolution, resolution, 
@@ -116,28 +122,29 @@ public class AggregatingMetricStore implements MetricStore {
         };
     }
 
-    long getFiner(long res){
-        if (res == 60L) {
-            return 10L;
-        } else if (res == 10L) {
-            return 1L;
+    int getFiner(int res){
+        if (res == 60) {
+            return 10;
+        } else if (res == 10) {
+            return 1;
         }
-        return 0L;
+        return 0;
     }
 
-    public void _scan(HashMap<String, Object> settings, IAggregator agg, TimeRange t, long res) {
+    public void _scan(HashMap<String, Object> settings, IAggregator agg, TimeRange t, int res) {
         LOG.info ("At _scan buckets with {} {} {} {}", settings, agg, t, res);
-        HashSet<TimeRange> timeSet = new HashSet<TimeRange>();
-        settings.put(StringKeywords.timeRangeSet, timeSet);
+
         if (res == 0) {
             // raw, just go ahead and scan
+            HashSet<TimeRange> timeSet = new HashSet<TimeRange>();
             timeSet.add(t);
+            settings.put(StringKeywords.timeRangeSet, timeSet);
             settings.put("aggLevel", 0);
             LOG.info("scan remainder bucket {}", settings);
             store.scan(settings, agg);
         } else {
-            long nextRes = getFiner(res);
-            long msToRes = 1000 * 60 * res;
+            int nextRes = getFiner(res);
+            int msToRes = 1000 * 60 * res;
             Long[] buckets = bucketize(t, msToRes);
 
             // can the head be subdivided?
@@ -151,15 +158,15 @@ public class AggregatingMetricStore implements MetricStore {
 
             // did we find buckets for the body? If so, go ahead and scan
             TimeRange tbody = new TimeRange(buckets[1], buckets[2], t.window);
-            timeSet.clear();
+            HashSet<TimeRange> timeSet = new HashSet<TimeRange>();
             timeSet.add(tbody);
-            settings.put("aggLevel", ((Long)res).intValue());
             settings.put(StringKeywords.timeRangeSet, timeSet);
+            settings.put(StringKeywords.aggLevel, ((Integer)res).intValue());
             LOG.info("scan body bucket {} settings: {}", tbody, settings);
             store.scan(settings, agg);
 
             // can the tail be subdivided?
-            if (buckets[0] != buckets[1]) {
+            if (buckets[2] != buckets[3]) {
                 TimeRange ttail = new TimeRange(buckets[2], buckets[3], t.window);
                 LOG.info("getting buckets for tail {} {}", buckets[2], buckets[3]);
                 _scan(settings, agg, ttail, nextRes);
@@ -179,61 +186,17 @@ public class AggregatingMetricStore implements MetricStore {
             }
 
             HashMap<String, Object> settingsCopy = new HashMap<String, Object>(settings);
-            _scan(settingsCopy, agg, t, 60);
-
-           //long msToHour= 1000 * 60 * 60;
-           //Long[] buckets = bucketize(t, msToHour);
-
-           //// now that we have overall buckets with coarsest resolution, 
-           //// try to get finer aggregations for the head and the tail
-
-           //HashSet<TimeRange> timeSet = new HashSet<TimeRange>();
-
-           //TimeRange thead = new TimeRange(buckets[0], buckets[1], t.window);
-
-           //// try 10 minutes
-           //long msTo10Minutes = 1000 * 60 * 10;
-           //Long[] tenMinuteHeadBuckets = bucketize(thead, msTo10Minutes);
-
-           //thead = new TimeRange(tenMinuteHeadBuckets[0], tenMinuteHeadBuckets[1], t.window);
-
-           //long msToMinutes = 1000 * 60;
-           //Long[] minuteHeadBuckets = bucketize(thead, msToMinutes);
-
-           //timeSet.add(new TimeRange(buckets[0], buckets[1], t.window));
-           //settingsCopy.put(StringKeywords.timeRangeSet, timeSet);
-
-           //if (buckets[0] != buckets[1]){
-           //    settingsCopy.put("aggLevel", 0);
-           //    LOG.info("scan head rt {}", settingsCopy);
-           //    store.scan(settingsCopy, agg);
-           //}
-
-           //timeSet.clear();
-           //timeSet.add(new TimeRange(buckets[1], buckets[2], t.window));
-           //settingsCopy.put("aggLevel", 60);
-           //LOG.info("scan meat {}", settingsCopy);
-           //store.scan(settingsCopy, agg);
-
-           //if (buckets[2] != buckets[3]){
-           //    timeSet.clear();
-           //    timeSet.add(new TimeRange(buckets[2], buckets[3], t.window));
-           //    settingsCopy.put("aggLevel", 0);
-           //    LOG.info("scan tail rt {}", settingsCopy);
-           //    store.scan(settingsCopy, agg);
-           //}
+            _scan(settingsCopy, agg, t, _buckets.get(0));
         }
     }
 
     @Override 
     public void remove(HashMap<String, Object> settings){
-        settings.put("aggLevel", 60);
         store.remove(settings);
     }
 
     @Override
     public boolean populateValue(Metric metric){
-        metric.setAggLevel((byte)60);
         return store.populateValue(metric);
     }
 }

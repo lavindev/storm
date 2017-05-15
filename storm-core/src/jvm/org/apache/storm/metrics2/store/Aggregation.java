@@ -63,8 +63,12 @@ public class Aggregation {
         this.settings.put(StringKeywords.port, port);
     }
 
-    public void filterComp(String comp) {
-        this.settings.put(StringKeywords.component, comp);
+    public void filterComponent(String component) {
+        this.settings.put(StringKeywords.component, component);
+    }
+
+    public void filterExecutor(String executor) {
+        this.settings.put(StringKeywords.executor, executor);
     }
 
     public void filterAggLevel(Integer comp) {

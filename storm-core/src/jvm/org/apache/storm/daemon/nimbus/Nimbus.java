@@ -2542,12 +2542,16 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             agg.filterTopo(topologyId); 
         }
         if (component != null) {
-            agg.filterComp(component); 
+            agg.filterComponent(component); 
+        }
+        if (executorId != null) {
+            agg.filterExecutor(executorId); 
         }
 
         if (metrics != null){
             for (String metric : metrics) {
                 if (metric != null) {
+                    // add to metrics to filter
                     agg.filterMetric(metric); 
                 }   
             }
@@ -2618,59 +2622,74 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             StormWindowedStats oneDayStats = new StormWindowedStats();
             oneDayStats.set_window (Window.ONE_DAY);
 
+            //TODO: make this a single iwndow, not a list of windows
             Window window = windows.get(0);
 
-            if (window == Window.ALL){
-                // no time boundaries
-                agg.filterTime(all_time, null, Window.ALL);
-                agg.filterTime(ten_mins_ago, null, Window.TEN_MIN);
-                agg.filterTime(three_hrs_ago, null, Window.THREE_HR);
-                agg.filterTime(one_day_ago, null, Window.ONE_DAY);
+            switch (window){
+                case TEN_MIN:
+                    agg.filterTime(ten_mins_ago, null, Window.TEN_MIN);
+                    result.add_to_windowed_stats(tenMinsStats);
+                    break;
+                case THREE_HR:
+                    agg.filterTime(three_hrs_ago, null, Window.THREE_HR);
+                    result.add_to_windowed_stats(threeHrsStats);
+                    break;
+                case ONE_DAY:
+                    agg.filterTime(one_day_ago, null, Window.ONE_DAY);
+                    result.add_to_windowed_stats(oneDayStats);
+                    break;
+                case ALL:
+                default:
+                    // no time boundaries
+                    agg.filterTime(all_time, null, Window.ALL);
+                    agg.filterTime(ten_mins_ago, null, Window.TEN_MIN);
+                    agg.filterTime(three_hrs_ago, null, Window.THREE_HR);
+                    agg.filterTime(one_day_ago, null, Window.ONE_DAY);
 
-                result.add_to_windowed_stats(allTimeStats);
-                result.add_to_windowed_stats(tenMinsStats);
-                result.add_to_windowed_stats(threeHrsStats);
-                result.add_to_windowed_stats(oneDayStats);
-
-            } else if (window == Window.TEN_MIN) {
-                agg.filterTime(ten_mins_ago, null, Window.TEN_MIN);
-                result.add_to_windowed_stats(tenMinsStats);
-            } else if (window == Window.THREE_HR) {
-                agg.filterTime(three_hrs_ago, null, Window.THREE_HR);
-                result.add_to_windowed_stats(threeHrsStats);
-            } else if (window == Window.ONE_DAY) {
-                agg.filterTime(one_day_ago, null, Window.ONE_DAY);
-                result.add_to_windowed_stats(oneDayStats);
+                    result.add_to_windowed_stats(allTimeStats);
+                    result.add_to_windowed_stats(tenMinsStats);
+                    result.add_to_windowed_stats(threeHrsStats);
+                    result.add_to_windowed_stats(oneDayStats);
+                    break;
             }
 
 
             try {
                 MetricResult metricResult = null;
-                if (op == StatsStoreOperation.SUM) {
-                    metricResult = agg.sum(aggregatingMetricsStore);
-                } else if (op == StatsStoreOperation.MIN) {
-                    metricResult = agg.min(aggregatingMetricsStore);
-                } else if (op == StatsStoreOperation.AVG) {
-                    LOG.info("computing mean");
-                    metricResult = agg.mean(aggregatingMetricsStore);
-                } else if (op == StatsStoreOperation.MAX) {
-                    metricResult = agg.max(aggregatingMetricsStore);
-                } else {
-                    LOG.error ("I can't handle that operation {}", op);
+                switch (op) {
+                    case SUM:
+                        metricResult = agg.sum(aggregatingMetricsStore);
+                        break;
+                    case MIN:
+                        metricResult = agg.min(aggregatingMetricsStore);
+                        break;
+                    case MAX:
+                        metricResult = agg.max(aggregatingMetricsStore);
+                        break;
+                    case AVG:
+                    default:
+                        metricResult = agg.mean(aggregatingMetricsStore);
+                        break;
                 }
 
                 for (String metric : metricResult.getMetricNames()){
                     for (TimeRange tr : metricResult.getTimeRanges(metric)){
 
                         Double value = metricResult.getValueFor(metric, tr);
-                        if (tr.window == Window.TEN_MIN){
-                            tenMinsStats.put_to_values (metric, value);
-                        } else if (tr.window == Window.THREE_HR) {
-                            threeHrsStats.put_to_values (metric, value);
-                        } else if (tr.window == Window.ONE_DAY) {
-                            oneDayStats.put_to_values (metric, value);
-                        } else {
-                            allTimeStats.put_to_values (metric, value);
+                        switch (tr.window) {
+                            case TEN_MIN:
+                                tenMinsStats.put_to_values (metric, value);
+                                break;
+                            case THREE_HR:
+                                threeHrsStats.put_to_values (metric, value);
+                                break;
+                            case ONE_DAY:
+                                oneDayStats.put_to_values (metric, value);
+                                break;
+                            case ALL:
+                            default:
+                                allTimeStats.put_to_values (metric, value);
+                                break;
                         }
                     }
                 }

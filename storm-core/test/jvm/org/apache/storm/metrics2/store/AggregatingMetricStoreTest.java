@@ -101,8 +101,8 @@ public class AggregatingMetricStoreTest {
         AggregatingMetricStore s = new AggregatingMetricStore(storeMock);
         TimeRange t = new TimeRange((5 * 3600L * 1000)-5000, (20 * 3600L * 1000) + 5000, Window.ALL);
         TimeRange tall = new TimeRange(0L, null, Window.ALL);
-        s.bucketize(t, 60L * 60 * 1000);
-        s.bucketize(t, 60L * 10 * 1000);
-        s.bucketize(tall, 60L * 60 * 1000);
+        s.bucketize(t, 60 * 60 * 1000);
+        s.bucketize(t, 60 * 10 * 1000);
+        s.bucketize(tall, 60 * 60 * 1000);
     }
 }

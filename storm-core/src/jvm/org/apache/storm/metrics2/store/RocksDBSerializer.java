@@ -178,12 +178,84 @@ public class RocksDBSerializer {
 
     public byte[] metadataKey(Metric m) {
         return metadataKey(getTopoId(m.getTopoIdStr()));
+
     }
+
+    public boolean putToTopoMap(byte[] key, byte[] value){
+        ByteBuffer bb = ByteBuffer.wrap(key);
+        //TODO: store these byte values here
+        if ((byte)0 != bb.get() ||
+            (byte)0 != bb.get()){ // second byte is metadata type
+            return false;
+        }
+        //TODO: change thrift object so these are all longs
+        //TODO: RHS can be thrift object
+        Integer topoId = bb.getInt();
+        try {
+            String topoIdStr = new String(value, "UTF-8");
+            _metaTopos.put_to_topo_ids(topoIdStr, topoId);
+            _revTopoIds.put(topoId, topoIdStr);
+        } catch (java.io.UnsupportedEncodingException ex) {
+            LOG.error("Unsupoorted encoding!", ex);
+            return false;
+        }
+        return true;
+    }
+
+    public boolean putToStreamMap(byte[] key, byte[] value){
+        ByteBuffer bb = ByteBuffer.wrap(key);
+        if ((byte)0 != bb.get() ||
+            (byte)1 != bb.get()){ // second byte is metadata type
+            return false;
+        }
+        Integer streamId = bb.getInt();
+        try {
+            String streamIdStr = new String(value, "UTF-8");
+            _metaTopos.put_to_stream_ids(streamIdStr, streamId);
+            _revStreamIds.put(streamId, streamIdStr);
+        } catch (java.io.UnsupportedEncodingException ex) {
+            LOG.error("Unsupoorted encoding!", ex);
+            return false;
+        }
+        return true;
+    }
+
+    public boolean putToHostMap(byte[] key, byte[] value){
+        ByteBuffer bb = ByteBuffer.wrap(key);
+        if ((byte)0 != bb.get() ||
+            (byte)2 != bb.get()){ // second byte is metadata type
+            return false;
+        }
+        Integer hostId = bb.getInt();
+        try {
+            String host = new String(value, "UTF-8");
+            _metaTopos.put_to_host_ids(host, hostId);
+            _revHostIds.put(hostId, host);
+        } catch (java.io.UnsupportedEncodingException ex) {
+            LOG.error("Unsupoorted encoding!", ex);
+            return false;
+        }
+        return true;
+    }
+    
+    public byte[] makeKey(byte type, Integer key){
+        //TODO: size too big
+        ByteBuffer bb = ByteBuffer.allocate(14);
+        bb.put((byte)0); // metadata
+        bb.put(type);    // metadata type
+        bb.putInt(key == null ? 0 : key);
+
+        int length = bb.position();
+        bb.position(0); //rewind
+        byte[] result = new byte[length];
+        bb.get(result, 0, length);
+        return result;
+    } 
 
     private byte[] metadataKey(Integer topoId) {
         ByteBuffer bb = ByteBuffer.allocate(320);
         bb.put((byte)0); // metadata
-        bb.put((byte)0); // agg level
+        bb.put((byte)3); // topo metadata
         bb.putInt(topoId);
         bb.putLong(0);
         bb.putInt(0);
@@ -202,7 +274,6 @@ public class RocksDBSerializer {
 
     public void populate(Metric m, byte[] valueInBytes){
         if (valueInBytes == null) {
-            LOG.error("Null bytes! => {}", m);
             m.setCount(0L);
             m.setValue(0.0);
             m.setMin(0.0);

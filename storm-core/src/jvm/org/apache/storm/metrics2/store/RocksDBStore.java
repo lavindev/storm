@@ -54,7 +54,9 @@ public class RocksDBStore implements MetricStore {
     // metadata instance
     private RocksDBSerializer _serializer;
 
-    private byte[] _metadataKey = new byte[] {(byte)0x00};
+    private byte _topoMetadataKey = (byte)0;
+    private byte _streamMetadataKey = (byte)1;
+    private byte _hostMetadataKey = (byte)2;
 
     /**
      * Implements the prepare method of the Metric Store, create RocksDB instance
@@ -63,7 +65,6 @@ public class RocksDBStore implements MetricStore {
      */
     @Override
     public void prepare(Map config) {
-
         try {
             validateConfig(config);
         } catch(MetricException e) {
@@ -97,43 +98,13 @@ public class RocksDBStore implements MetricStore {
             }
         }
 
-        // table format config
-        String tableType = "plain";
-        if (config.containsKey("storm.metrics2.store.rocksdb.table_type")){
-            tableType = (String)config.get("storm.metrics2.store.rocksdb.table_type");
-        }
+        LOG.info("Instantiating RocksDB BlockBasedTable");
 
-        if (true || tableType.equals("block")) {
-            LOG.info("Instantiating RocksDB BlockBasedTable");
-            BlockBasedTableConfig tfc = new BlockBasedTableConfig();
-            tfc.setBlockCacheSize((long)16*1024*1024);
-            tfc.setIndexType(IndexType.kHashSearch);
-            tfc.setBlockSize((long)4*1024);
-            options.useCappedPrefixExtractor(44); // epoch in ms length
-            options.setTableFormatConfig(tfc);
-            
-            options.setMemtablePrefixBloomSizeRatio(10);
-            options.setBloomLocality(1);
-            options.setMaxOpenFiles(-1);
-
-            options.setWriteBufferSize(32 << 20);
-            options.setMaxWriteBufferNumber(2);
-            options.setMinWriteBufferNumberToMerge(1);
-            options.setVerifyChecksumsInCompaction(false);
-            //options.setDisableDataSync(true);
-            options.setBytesPerSync(2 << 20);
-
-            options.setCompactionStyle(CompactionStyle.UNIVERSAL);
-            options.setLevelZeroFileNumCompactionTrigger(1);
-            options.setLevelZeroSlowdownWritesTrigger(8);
-            options.setLevelZeroStopWritesTrigger(16);
-        } else {
-            LOG.info("Instantiating RocksDB PlainTable");
-            PlainTableConfig tfc = new PlainTableConfig();
-            tfc.setFullScanMode(true);
-            tfc.setStoreIndexInFile(true);
-            options.setTableFormatConfig(tfc);
-        }
+        // use the hash index for prefix searches
+        BlockBasedTableConfig tfc = new BlockBasedTableConfig();
+        tfc.setIndexType(IndexType.kHashSearch);
+        options.setTableFormatConfig(tfc);
+        options.useCappedPrefixExtractor(48); // current key is 48 bytes long
 
         _db = null;
         try {
@@ -151,24 +122,15 @@ public class RocksDBStore implements MetricStore {
 
         // restore metadata
         LOG.info ("Restoring metadata");
-        try {
-            /*
-            scan(_topoMetadataKey, (key, value) -> {
-                _serializer.putToTopoMap(key, value);
-            });
-            scan(_streamMetadataKey, (key, value) -> {
-                _serializer.putToStreamMap(key, value);
-            });
-            scan(_hostMetadataKey, (key, value) -> {
-                _serializer.putToHostMap(key, value);
-            });
-            */
-            _serializer.deserializeTopoMap(_db.get(_topoMetadataKey));
-            _serializer.deserializeStreamMap(_db.get(_streamMetadataKey));
-            _serializer.deserializeHostMap(_db.get(_hostMetadataKey));
-        } catch (RocksDBException e){
-            LOG.error ("Failure to restore Metadata", e);
-        }
+        scanKV(_serializer.makeKey(_topoMetadataKey, null), (key, value) -> {
+            return _serializer.putToTopoMap(key, value);
+        });
+        scanKV(_serializer.makeKey(_streamMetadataKey, null), (key, value) -> {
+            return _serializer.putToStreamMap(key, value);
+        });
+        scanKV(_serializer.makeKey(_hostMetadataKey, null), (key, value) -> {
+            return _serializer.putToHostMap(key, value);
+        });
 
         LOG.info ("Metadata topos {}", _serializer.contents());
 
@@ -192,6 +154,11 @@ public class RocksDBStore implements MetricStore {
         return _db;
     }
 
+    private RocksDB getMetadataDb(){
+        // this could become a different database later
+        return _db;
+    }
+
     /**
      * Implements the insert method of the Metric Store, stores metrics in the store
      * @param m Metric to store
@@ -202,19 +169,32 @@ public class RocksDBStore implements MetricStore {
             LOG.info("inserting {}", m.toString());
 
             RocksDB db = this.getDb(m);
+            RocksDB metaDb = this.getMetadataDb();
 
             // load metadata
             if (!_serializer.metaInitialized(m)){
                 _serializer.deserializeMeta(m.getTopoIdStr(), db.get(_serializer.metadataKey(m)));
             }
 
+            // add mapping in memory
+            Integer topoId = _serializer.getTopoId(m.getTopoIdStr());
+            Integer hostId = _serializer.getHostId(m.getHost());
+            Integer streamId = _serializer.getStreamId(m.getStream());
+
+            // persist metadata in rocksdb
+            try { 
+                metaDb.put(_serializer.makeKey(_topoMetadataKey, topoId), m.getTopoIdStr().getBytes("UTF-8"));
+                metaDb.put(_serializer.makeKey(_hostMetadataKey, hostId), m.getHost().getBytes("UTF-8"));
+                metaDb.put(_serializer.makeKey(_streamMetadataKey, streamId), m.getStream().getBytes("UTF-8"));
+            } catch (java.io.UnsupportedEncodingException ex) {
+                LOG.error("Unsupoorted encoding!", ex);
+                return;
+            }
+
             RocksDBSerializer.SerializationResult sr = _serializer.serialize(m);
             db.put(sr.metricKey, sr.metricValue);
 
-            if (sr.metaValue != null) {
-                db.put(_metadataKey, sr.metaValue);
-            }
-
+            // TODO: perhaps this becomes flat against rocksdb too
             if (sr.metaTopoValue != null) {
                 db.put(_serializer.metadataKey(m), sr.metaTopoValue);
             }
@@ -227,7 +207,8 @@ public class RocksDBStore implements MetricStore {
 
     /**
      * Implements scan method of the Metrics Store, scans all metrics in the store
-     * @return List<String> metrics in store
+     * @param agg Callback fn, called as we are scanning through store
+     * @return void
      */
 
     @Override
@@ -247,7 +228,8 @@ public class RocksDBStore implements MetricStore {
      * Implements scan method of the Metrics Store, scans all metrics with settings in the store
      * Will try to search the fastest way possible
      * @param settings map of settings to search by
-     * @return List<String> metrics in store
+     * @param agg Callback fn, called as we are scanning through store
+     * @return void
      */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg){
@@ -318,12 +300,39 @@ public class RocksDBStore implements MetricStore {
      * @param settings search settings
      * @return List<String> metrics in store
      */
+    private void scanKV(byte[] prefix, IScanCallback fn){
+        String prefixStr = Hex.encodeHexString(prefix);
+        LOG.info("Prefix kv scan with {} and length {}", prefixStr, prefix.length);
+        ReadOptions ro = new ReadOptions();
+        ro.setTotalOrderSeek(true);
+        RocksIterator iterator = _db.newIterator(ro);
+        iterator.seekToFirst();
+        long startTime = System.nanoTime();
+        long numRecords = 0;
+        long numScannedRecords = 0;
+        for (iterator.seek(prefix); iterator.isValid(); iterator.next()) {
+            //String key = new String(iterator.key());
+
+            // put metadata to _serializer maps
+            if (!fn.cb(iterator.key(), iterator.value())){
+                // if cb returns false, we are done with this section of
+                // rows
+                return;
+            }
+            numRecords++;
+            numScannedRecords++;
+        }
+        LOG.info("prefix scan complete for {} with {} records and {} scanned total in {} ms", 
+                prefixStr, numRecords, numScannedRecords, (System.nanoTime() - startTime)/1000000);
+    }
+
     private void scan(byte[] prefix, HashMap<String, Object> settings, IAggregator agg) {
         String prefixStr = Hex.encodeHexString(prefix);
         LOG.info("Prefix scan with {} and length {}", prefixStr, prefix.length);
         ReadOptions ro = new ReadOptions();
-        //ro.setPrefixSameAsStart(false);
         ro.setTotalOrderSeek(true);
+
+        //TODO: somehow, either get the reference for the db or just use a single db for everything
         RocksIterator iterator = _db.newIterator(ro);
         iterator.seekToFirst();
         long startTime = System.nanoTime();
