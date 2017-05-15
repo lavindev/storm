@@ -45,7 +45,7 @@ public class Metric {
     private double sum = 0.0;
     private double min = 0.0;
     private double max = 0.0;
-    private Byte aggLevel = (byte)0;
+    private Byte aggLevel = (byte)0; // raw values are not aggregated
 
     public Metric() {
     }
@@ -89,7 +89,7 @@ public class Metric {
     public void setOwner(String owner){ this.owner = owner; }
     public String getOwner() { return this.owner; }
 
-    public void setAggLevel(Byte aggLevel){ this.aggLevel = aggLevel; }
+    public void setAggLevel(Byte aggLevelInMins){ this.aggLevel = aggLevelInMins; }
     public Byte getAggLevel(){ return this.aggLevel; }
 
     public void setCompName(String compName) { this.compIdStr = compName; }
