@@ -169,7 +169,8 @@ public class StormPreparableReporter implements PreparableReporter {
                 for (Map.Entry<String, Gauge> c : gauges.entrySet()) {
                     String key = c.getKey();
                     LOG.info("Gauge {}", key);
-                    long value = (Long)c.getValue().getValue();
+                    // TODO: value here is an object, so we are making all kinds of assumptions
+                    double value = ((Number)c.getValue().getValue()).doubleValue();
                     LOG.info("Gauge k {} v {}", key, value);
                     workerStats.put_to_metrics(key, value);
                 }

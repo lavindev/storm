@@ -2479,6 +2479,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
 
         for (Entry<String, WorkerStats> ws : supervisorWorkerStats.get_worker_stats().entrySet()) {
             WorkerStats workerStats = ws.getValue();
+            long port = workerStats.get_port();
             String topoId = workerStats.get_storm_id();
             if (lastTopoId == null || !lastTopoId.equals(topoId)) {
                 try {
@@ -2511,6 +2512,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                     Double value = metricValue.getValue();
 
                     String[] keyParts = key.split("\\.");
+                    //TODO: this is not good
                     String execId = keyParts[0];
                     String stream = keyParts[1];
                     String compId = keyParts[2];
@@ -2518,8 +2520,10 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                 
                     Metric m = new Metric(metricName, tstamp, execId, compId, stream, topoId, value);
                     m.setHost(host);
+                    m.setPort(port);
                     m.setOwner(submitter);
-                    this.metricsStore.insert(m);
+                    // note: the aggregating store also inserts the raw metric into the
+                    // underlying store
                     this.aggregatingMetricsStore.insert(m);
                 }
             }

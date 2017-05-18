@@ -116,9 +116,11 @@ public class Aggregation {
         store.scan(settings, (metric, timeRanges) -> {
             String metricName = metric.getMetricName();
             for (TimeRange tr : timeRanges) {
-                Double value = metric.getValue();
+                Double value = metric.getMin();
                 value = value == null ? 0.0 : value;
-                result.setValueFor(metricName, tr, Math.min(value, result.getValueFor(metricName, tr)));
+                Double prev = result.getValueFor(metricName, tr);
+                prev = prev == null ? 0.0 : prev;
+                result.setValueFor(metricName, tr, Math.min(value, prev));
                 result.incCountFor(metricName, tr);
             }
         });
@@ -130,8 +132,11 @@ public class Aggregation {
         store.scan(settings, (metric, timeRanges) -> {
             String metricName = metric.getMetricName();
             for (TimeRange tr : timeRanges) {
-                Double value = metric.getValue();
-                result.setValueFor(metricName, tr, Math.max(value, result.getValueFor(metricName, tr)));
+                Double value = metric.getMax();
+                value = value == null ? 0.0 : value;
+                Double prev = result.getValueFor(metricName, tr);
+                prev = prev == null ? 0.0 : prev;
+                result.setValueFor(metricName, tr, Math.max(value, prev));
                 result.incCountFor(metricName, tr);
             }
         });
@@ -155,13 +160,10 @@ public class Aggregation {
                 result.incCountFor(metricName, tr, metric.getCount());
             }
         });
-        LOG.info("try to perform avg for {}", result.getMetricNames());
+        //TODO: this could happen in the loop above
         for (String metricName : result.getMetricNames()) {
-            LOG.info("try to perform avg for {}", metricName);
             for (TimeRange tr : result.getTimeRanges(metricName)){
-                LOG.info("try to perform avg for {} at {}", metricName, tr);
                 Long count = result.getCountFor(metricName, tr);
-                LOG.info("count for avg for {} at {} = {}", metricName, tr, count);
                 if (count != null && count > 0) {
                     LOG.info("perform avg for {} {} {} / {} = {}", metricName, tr, result.getValueFor(metricName, tr), count);
                     result.setValueFor(metricName, tr, 
