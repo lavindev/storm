@@ -44,6 +44,7 @@ import org.apache.storm.utils.Time;
 public class HBaseStoreTest {
 
     private final static String HBASE_ROOT_DIR = "/tmp/hbase";
+    private final static String SCHEMA = "compact";
     private final static String HBASE_METRICS_TABLE = "metrics";
     private final static int RETENTION = 1;
     private final static String RETENTION_UNITS = "MINUTES";
@@ -58,6 +59,7 @@ public class HBaseStoreTest {
 
         confMap.put("storm.metrics2.store.HBaseStore.hbase.root_dir", HBASE_ROOT_DIR);
         confMap.put("storm.metrics2.store.HBaseStore.hbase.metrics_table", HBASE_METRICS_TABLE);
+        confMap.put("storm.metrics2.store.HBaseStore.schema", SCHEMA);
         confMap.put("storm.metrics2.store.HBaseStore.retention", RETENTION);
         confMap.put("storm.metrics2.store.HBaseStore.retention.units", RETENTION_UNITS);
         confMap.put("storm.zookeeper.servers", ZOOKEEPER_SERVERS);

@@ -18,14 +18,12 @@
 package org.apache.storm.metrics2.store;
 
 
+import org.apache.commons.codec.binary.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
+import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -40,6 +38,7 @@ public class HBaseStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseStore.class);
 
     private final static String BASE_CONFIG_KEY = "storm.metrics2.store.HBaseStore";
+    private final static String SCHEMA_KEY = BASE_CONFIG_KEY + ".schema";
     private final static String RETENTION_KEY = BASE_CONFIG_KEY + ".retention";
     private final static String RETENTION_UNIT_KEY = BASE_CONFIG_KEY + ".retention.units";
     private final static String HBASE_ROOT_DIR_KEY = BASE_CONFIG_KEY + ".hbase.root_dir";
@@ -60,6 +59,10 @@ public class HBaseStore implements MetricStore {
     private HTable _metricsTable = null;
     private HBaseSerializer _serializer = null;
 
+    private byte _topoMetadataKey = (byte) 0;
+    private byte _streamMetadataKey = (byte) 1;
+    private byte _hostMetadataKey = (byte) 2;
+
     /**
      * Create HBase instance
      * using the configurations provided via the config map
@@ -69,12 +72,12 @@ public class HBaseStore implements MetricStore {
     @Override
     public void prepare(Map config) throws MetricException {
 
-
-        validateConfig(config);
         // setup
+        validateConfig(config);
         initializeSchema(config);
         Configuration hbaseConf = createHBaseConfiguration(config);
         HTableDescriptor tableDesc = createMetricsTableDescriptor(config);
+
         // TODO: pass values
         this._serializer = new HBaseSerializer();
 
@@ -91,7 +94,20 @@ public class HBaseStore implements MetricStore {
 
         } catch (IOException e) {
             LOG.error("HBase Metrics initialization error ", e);
+            return;
         }
+
+        // restore metadata
+        LOG.info("Restoring metadata");
+        scanKV(_serializer.makeKey(_topoMetadataKey, null), (key, value) -> {
+            return _serializer.putToTopoMap(key, value);
+        });
+        scanKV(_serializer.makeKey(_streamMetadataKey, null), (key, value) -> {
+            return _serializer.putToStreamMap(key, value);
+        });
+        scanKV(_serializer.makeKey(_hostMetadataKey, null), (key, value) -> {
+            return _serializer.putToHostMap(key, value);
+        });
 
     }
 
@@ -138,10 +154,13 @@ public class HBaseStore implements MetricStore {
     private void validateConfig(Map config) throws MetricException {
         // TODO: check values, fix error strings
         if (!(config.containsKey(HBASE_ROOT_DIR_KEY))) {
-            throw new MetricException("Need hbase root dir");
+            throw new MetricException("Need HBase root dir");
+        }
+        if (!(config.containsKey(SCHEMA_KEY))) {
+            throw new MetricException("Need hbase schema - compact or expanded");
         }
         if (!(config.containsKey(HBASE_METRICS_TABLE_KEY))) {
-            throw new MetricException("Need hbase metrics table");
+            throw new MetricException("Need HBase metrics table");
         }
         if (!(config.containsKey(RETENTION_KEY) && config.containsKey(RETENTION_UNIT_KEY))) {
             throw new MetricException("Need retention value/units");
@@ -165,32 +184,49 @@ public class HBaseStore implements MetricStore {
     @Override
     public void insert(Metric m) {
 
-        byte[] key = _serializer.serializeKey(m);
-        long count = m.getCount();
+        LOG.info("inserting {}", m.toString());
 
-        Put newEntry = new Put(key);
+        // load metadata
+        try {
+            if (!_serializer.metaInitialized(m)) {
+                _serializer.deserializeMeta(m.getTopoIdStr(), get(_serializer.metadataKey(m)));
+            }
+        } catch (IOException e) {
+            LOG.error("Could not load metadata", e);
+            return;
+        }
 
-        byte[] mValue = Bytes.toBytes(m.getValue());
-        newEntry.addColumn(COLUMN_FAMILY, COLUMN_VALUE, mValue);
+        // add mapping in memory
+        Integer topoId = _serializer.getTopoId(m.getTopoIdStr());
+        Integer hostId = _serializer.getHostId(m.getHost());
+        Integer streamId = _serializer.getStreamId(m.getStream());
 
-        if (count > 1) {
-            byte[] mCount = Bytes.toBytes(count);
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_COUNT, mCount);
+        // create new batch op
+        HBaseStoreBatchManager batch = new HBaseStoreBatchManager(_metricsTable);
+        batch.setDefaultColumnFamily(COLUMN_FAMILY);
+        batch.setDefaultColumn(COLUMN_VALUE);
 
-            byte[] mSum = Bytes.toBytes(m.getSum());
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_SUM, mSum);
+        // persist metadata
+        try {
+            batch.put(_serializer.makeKey(_topoMetadataKey, topoId), m.getTopoIdStr().getBytes("UTF-8"));
+            batch.put(_serializer.makeKey(_hostMetadataKey, hostId), m.getHost().getBytes("UTF-8"));
+            batch.put(_serializer.makeKey(_streamMetadataKey, streamId), m.getStream().getBytes("UTF-8"));
+        } catch (java.io.UnsupportedEncodingException ex) {
+            LOG.error("Unsupported encoding!", ex);
+            return;
+        }
 
-            byte[] mMin = Bytes.toBytes(m.getMin());
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_MIN, mMin);
+        HBaseSerializer.SerializationResult sr = _serializer.serialize(m);
+        batch.put(sr.metricKey, sr.metricValue);
 
-            byte[] mMax = Bytes.toBytes(m.getMax());
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_MAX, mMax);
+        if (sr.metaTopoValue != null) {
+            batch.put(_serializer.metadataKey(m), sr.metaTopoValue);
         }
 
         try {
-            _metricsTable.put(newEntry);
-        } catch (IOException e) {
-            LOG.error("Could not insert metric", e, "// m =", m.toString());
+            batch.execute(true);
+        } catch (IOException | InterruptedException e) {
+            LOG.error("Could not insert into HBase", e);
         }
 
     }
@@ -202,60 +238,167 @@ public class HBaseStore implements MetricStore {
      */
     @Override
     public void scan(IAggregator agg) {
-        System.out.println("Not implemented - scan");
+        for (String topoId : _serializer.getTopoIds()) {
+            LOG.debug("full scanning for topology {}", topoId);
+            HashMap<String, Object> settings = new HashMap<String, Object>();
+            settings.put(StringKeywords.topoId, topoId);
+            scan(settings, agg);
+        }
     }
-
 
     /**
      * Implements scan method of the Metrics Store, scans all metrics with settings in the store
      * Will try to search the fastest way possible
      *
      * @param settings map of settings to search by
-     * @return List<Double> metrics in store
+     * @param agg      Callback fn, called as we are scanning through store
+     * @return void
      */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg) {
-        System.out.println("Not implemented - scan2");
+        // load metadata
+        // TODO: make function that can take the settings and decide
+        // whether we have enough info to find the db
+        // rather than construct a metric
+        Metric m = new Metric();
+        String topoIdStr = (String) settings.get(StringKeywords.topoId);
+        m.setTopoIdStr(topoIdStr);
+
+        try {
+            if (!_serializer.metaInitialized(m)) {
+                _serializer.deserializeMeta(m.getTopoIdStr(), get(_serializer.metadataKey(m)));
+            }
+        } catch (IOException ex) {
+            LOG.error("Error loading metadata", ex);
+        }
+
+        byte[] prefix = _serializer.createPrefix(settings);
+        if (prefix != null) {
+            scan(prefix, settings, agg);
+            return;
+        }
+        LOG.error("Couldn't obtain prefix");
+    }
+
+
+    public byte[] get(byte[] key) throws IOException {
+        Get g = new Get(key);
+        Result result = _metricsTable.get(g);
+        return result.getValue(COLUMN_FAMILY, COLUMN_VALUE);
+    }
+
+
+    /**
+     * Implements scan method of the Metrics Store, scans all metrics with prefix in the store
+     *
+     * @param prefix   prefix to query in store
+     * @param settings search settings
+     * @return List<String> metrics in store
+     */
+    private void scanKV(byte[] prefix, IScanCallback fn) {
+        String prefixStr = Hex.encodeHexString(prefix);
+        LOG.info("Prefix kv scan with {} and length {}", prefixStr, prefix.length);
+
+        Scan scan = new Scan();
+        scan.setRowPrefixFilter(prefix);
+        long startTime = System.nanoTime();
+        long numRecords = 0;
+        long numScannedRecords = 0;
+
+        try {
+            ResultScanner scanner = _metricsTable.getScanner(scan);
+
+            for (Result result = scanner.next(); result != null; result = scanner.next()) {
+                byte[] key = result.getRow();
+                byte[] value = result.getValue(COLUMN_FAMILY, COLUMN_VALUE);
+                // put metadata to _serializer maps
+                if (!fn.cb(key, value)) {
+                    // if cb returns false, we are done with this section of rows
+                    break;
+                }
+                numRecords++;
+                numScannedRecords++;
+            }
+
+            scanner.close();
+        } catch (IOException e) {
+            LOG.error("Could not scan HBase", e);
+        }
+        LOG.info("prefix scan complete for {} with {} records and {} scanned total in {} ms",
+                prefixStr, numRecords, numScannedRecords, (System.nanoTime() - startTime) / 1000000);
+    }
+
+    private void scan(byte[] prefix, HashMap<String, Object> settings, IAggregator agg) {
+        String prefixStr = Hex.encodeHexString(prefix);
+        LOG.info("Prefix scan with {} and length {}", prefixStr, prefix.length);
+
+        Scan scan = new Scan();
+        scan.setRowPrefixFilter(prefix);
+        long startTime = System.nanoTime();
+        long numRecords = 0;
+        long numScannedRecords = 0;
+
+        try {
+            ResultScanner scanner = _metricsTable.getScanner(scan);
+
+            for (Result result = scanner.next(); result != null; result = scanner.next()) {
+
+                byte[] key = result.getRow();
+                byte[] value = result.getValue(COLUMN_FAMILY, COLUMN_VALUE);
+
+                Metric metric = _serializer.deserialize(key);
+                if (metric == null) {
+                    // if we can't deserialize (e.g. key type is metadata)
+                    // we should be done
+                    break;
+                }
+                LOG.debug("Scanning key: {}", metric.toString());
+
+                Set<TimeRange> timeRanges = checkRequiredSettings(metric, settings);
+                numScannedRecords++;
+                if (timeRanges != null) {
+                    boolean include = checkMetric(metric, settings);
+                    if (include) {
+                        LOG.debug("Match key: {}", Hex.encodeHexString(key));
+                        numRecords++;
+                        if (!_serializer.metaInitialized(metric)) {
+                            _serializer.deserializeMeta(metric.getTopoIdStr(), _serializer.metadataKey(metric));
+                        }
+                        _serializer.populate(metric, value);
+                        agg.agg(metric, timeRanges);
+                    }
+                } else {
+                    // if we don't find in required settings, no need to continue
+                    break;
+                }
+            }
+
+            scanner.close();
+        } catch (IOException e) {
+            LOG.error("Could not scan HBase", e);
+        }
+
+        LOG.info("prefix scan complete for {} with {} records and {} scanned total in {} ms",
+                prefixStr, numRecords, numScannedRecords, (System.nanoTime() - startTime) / 1000000);
+
     }
 
     // get by matching a key exactly
     @Override
     public boolean populateValue(Metric metric) {
-        byte[] key = _serializer.serializeKey(metric);
-
-        Get g = new Get(key);
         try {
-            Result entry = _metricsTable.get(g);
+            // load metadata
+            if (!_serializer.metaInitialized(metric)) {
+                _serializer.deserializeMeta(metric.getTopoIdStr(), get(_serializer.metadataKey(metric)));
+            }
 
-            if (!entry.getExists())
-                return false;
+            HBaseSerializer.SerializationResult sr = _serializer.serialize(metric);
 
-            byte[] value = entry.getValue(COLUMN_FAMILY, COLUMN_VALUE);
-            if (value != null)
-                metric.setValue(Bytes.toDouble(value));
-
-            byte[] count = entry.getValue(COLUMN_FAMILY, COLUMN_COUNT);
-            if (count != null)
-                metric.setCount(Bytes.toLong(count));
-            else
-                metric.setCount(1);
-
-            byte[] sum = entry.getValue(COLUMN_FAMILY, COLUMN_SUM);
-            if (sum != null)
-                metric.setValue(Bytes.toDouble(sum));
-
-            byte[] min = entry.getValue(COLUMN_FAMILY, COLUMN_MIN);
-            if (min != null)
-                metric.setValue(Bytes.toDouble(min));
-
-            byte[] max = entry.getValue(COLUMN_FAMILY, COLUMN_MAX);
-            if (max != null)
-                metric.setValue(Bytes.toDouble(max));
-
-            return true;
-
-        } catch (IOException e) {
-            LOG.error("Could not retrieve metric", e);
+            byte[] value = get(sr.metricKey);
+            _serializer.populate(metric, value);
+            return value != null;
+        } catch (IOException ex) {
+            LOG.error("Exception getting value:", ex);
             return false;
         }
     }
@@ -263,7 +406,75 @@ public class HBaseStore implements MetricStore {
     // remove things matching settings, kind of like a scan but much scarier
     @Override
     public void remove(HashMap<String, Object> settings) {
-        System.out.println("Not implemented - remove");
+        // for each key we match, remove it
+        scan(settings, (metric, timeRanges) -> {
+            remove(metric);
+        });
     }
+
+    public void remove(Metric keyToRemove) {
+        try {
+            HBaseSerializer.SerializationResult result = _serializer.serialize(keyToRemove);
+            Delete d = new Delete(result.metricKey);
+            _metricsTable.delete(d);
+        } catch (IOException ex) {
+            LOG.error("Exception while removing {}", keyToRemove);
+        }
+    }
+
+    /**
+     * Implements configuration validation of Metrics Store, validates storm configuration for Metrics Store
+     *
+     * @param possibleKey key to check
+     * @param settings    search settings
+     * @throws MetricException if there is a missing required configuration or if the store does not exist but
+     *                         the config specifies not to create the store
+     */
+    private boolean checkMetric(Metric possibleKey, HashMap<String, Object> settings) {
+        LOG.info("Checking {}", possibleKey);
+        if (settings.containsKey(StringKeywords.component) &&
+                !possibleKey.getCompName().equals(settings.get(StringKeywords.component))) {
+            LOG.info("Not the right component {}", possibleKey.getCompName());
+            return false;
+        } else if (settings.containsKey(StringKeywords.metricSet) &&
+                !((HashSet<String>) settings.get(StringKeywords.metricSet)).contains(possibleKey.getMetricName())) {
+            LOG.info("Not the right metric name {}", possibleKey.getMetricName());
+            return false;
+        }
+        return true;
+    }
+
+    private Set<TimeRange> checkRequiredSettings(Metric possibleKey, HashMap<String, Object> settings) {
+        LOG.debug("Checking metric {} key {}", possibleKey, Hex.encodeHexString(((RocksDBMetric) possibleKey).getKey()));
+        byte aggLevel = ((Integer) settings.get(StringKeywords.aggLevel)).byteValue();
+
+        LOG.info("compare agg level: {} {}", possibleKey.getAggLevel(), aggLevel);
+
+        if (settings.containsKey(StringKeywords.aggLevel) &&
+                (possibleKey.getAggLevel() == null ||
+                        !possibleKey.getAggLevel().equals(((Integer) settings.get(StringKeywords.aggLevel)).byteValue()))) {
+            LOG.info("DOES NOT MATCH agg level: {} {}", possibleKey.getAggLevel(), ((Integer) settings.get(StringKeywords.aggLevel)).byteValue());
+            return null;
+        } else if (settings.containsKey(StringKeywords.topoId) &&
+                !possibleKey.getTopoIdStr().equals(settings.get(StringKeywords.topoId))) {
+            LOG.info("DOES NOT MATCH topo {} {}", possibleKey.getTopoIdStr(), settings.get(StringKeywords.topoId));
+            return null;
+        } else if (settings.containsKey(StringKeywords.timeRangeSet)) {
+            Set<TimeRange> timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
+            Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
+            for (TimeRange tr : timeRangeSet) {
+                Long tstamp = possibleKey.getTimeStamp();
+                if (tr.contains(tstamp)) {
+                    matchedTimeRanges.add(tr);
+                }
+            }
+            if (matchedTimeRanges.size() == 0) {
+                LOG.info("DOES NOT MATCH time ranges");
+            }
+            return matchedTimeRanges.size() > 0 ? matchedTimeRanges : null;
+        }
+        return null;
+    }
+
 
 }
