@@ -294,7 +294,7 @@ storm.daemon.metrics.reporter.plugins:
 # storm.metrics2.store.rocksdb.retention: 1
 # storm.metrics2.store.rocksdb.retention.units: "MINUTES"
 
-storm.metrics2.store.class : "org.apache.storm.hbase.metrics2.store.HBaseStore"
+storm.metrics2.store.class: "org.apache.storm.metrics2.store.HBaseStore"
 storm.metrics2.store.HBaseStore.retention: 1
 storm.metrics2.store.HBaseStore.retention.units: "MINUTES"
 storm.metrics2.store.HBaseStore.hbase.root_dir: "/tmp/hbase"

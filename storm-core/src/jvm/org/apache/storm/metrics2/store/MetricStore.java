@@ -29,7 +29,7 @@ public interface MetricStore {
      * using the configurations provided via the config map
      * @param config Storm config map
      */
-    void prepare(Map config);
+    void prepare(Map config) throws MetricException;
 
     /**
      * Stores metrics in the store
