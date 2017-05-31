@@ -19,6 +19,9 @@ package org.apache.storm.metrics2.store;
 
 
 import org.apache.commons.codec.binary.Hex;
+import org.apache.hadoop.hbase.mapred.RowCounter;
+import org.apache.storm.generated.Window;
+import org.apache.storm.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +59,7 @@ public class HBaseStore implements MetricStore {
 
     private Connection _hbaseConnection = null;
     private Admin _hbaseAdmin = null;
-    private HTable _metricsTable = null;
+    private Table _metricsTable = null;
     private HBaseSerializer _serializer = null;
 
     private byte _topoMetadataKey = (byte) 0;
@@ -78,9 +81,6 @@ public class HBaseStore implements MetricStore {
         Configuration hbaseConf = createHBaseConfiguration(config);
         HTableDescriptor tableDesc = createMetricsTableDescriptor(config);
 
-        // TODO: pass values
-        this._serializer = new HBaseSerializer();
-
         // connect
         try {
             this._hbaseConnection = ConnectionFactory.createConnection(hbaseConf);
@@ -88,13 +88,11 @@ public class HBaseStore implements MetricStore {
             if (!_hbaseAdmin.tableExists(tableDesc.getTableName())) {
                 _hbaseAdmin.createTable(tableDesc);
             }
-
-            // TODO: fix init, deprecated
-            this._metricsTable = new HTable(tableDesc.getTableName(), _hbaseConnection);
-
+            this._metricsTable = _hbaseConnection.getTable(tableDesc.getTableName());
+            // TODO: pass values
+            this._serializer = new HBaseSerializer();
         } catch (IOException e) {
-            LOG.error("HBase Metrics initialization error ", e);
-            return;
+            throw new MetricException("HBase connection error " + e);
         }
 
         // restore metadata
@@ -134,8 +132,7 @@ public class HBaseStore implements MetricStore {
         TableName tableName = TableName.valueOf(name);
         HColumnDescriptor columnFamily = new HColumnDescriptor(COLUMN_FAMILY);
 
-        HTableDescriptor descriptor = new HTableDescriptor(tableName);
-        descriptor.addFamily(columnFamily);
+        HTableDescriptor descriptor = new HTableDescriptor(tableName).addFamily(columnFamily);
 
         return descriptor;
     }
@@ -153,6 +150,7 @@ public class HBaseStore implements MetricStore {
 
     private void validateConfig(Map config) throws MetricException {
         // TODO: check values, fix error strings
+
         if (!(config.containsKey(HBASE_ROOT_DIR_KEY))) {
             throw new MetricException("Need HBase root dir");
         }
@@ -202,9 +200,9 @@ public class HBaseStore implements MetricStore {
         Integer streamId = _serializer.getStreamId(m.getStream());
 
         // create new batch op
-        HBaseStoreBatchManager batch = new HBaseStoreBatchManager(_metricsTable);
-        batch.setDefaultColumnFamily(COLUMN_FAMILY);
-        batch.setDefaultColumn(COLUMN_VALUE);
+        HBaseStoreBatchManager batch = new HBaseStoreBatchManager(_metricsTable)
+                .withColumnFamily(COLUMN_FAMILY)
+                .withColumn(COLUMN_VALUE);
 
         // persist metadata
         try {
@@ -228,7 +226,6 @@ public class HBaseStore implements MetricStore {
         } catch (IOException | InterruptedException e) {
             LOG.error("Could not insert into HBase", e);
         }
-
     }
 
     /**
@@ -272,6 +269,11 @@ public class HBaseStore implements MetricStore {
             LOG.error("Error loading metadata", ex);
         }
 
+        if (settings.containsKey(StringKeywords.timeRangeSet)){
+            Set<TimeRange> timeRanges = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
+            System.out.println(settings.toString());
+        }
+
         byte[] prefix = _serializer.createPrefix(settings);
         if (prefix != null) {
             scan(prefix, settings, agg);
@@ -285,6 +287,12 @@ public class HBaseStore implements MetricStore {
         Get g = new Get(key);
         Result result = _metricsTable.get(g);
         return result.getValue(COLUMN_FAMILY, COLUMN_VALUE);
+    }
+
+    public void put(byte[] key, byte[] value) throws IOException {
+        Put p = new Put(key);
+        p.addColumn(COLUMN_FAMILY, COLUMN_VALUE, value);
+        _metricsTable.put(p);
     }
 
 
@@ -333,14 +341,15 @@ public class HBaseStore implements MetricStore {
         LOG.info("Prefix scan with {} and length {}", prefixStr, prefix.length);
 
         Scan scan = new Scan();
+        scan.addColumn(COLUMN_FAMILY, COLUMN_VALUE);
         scan.setRowPrefixFilter(prefix);
         long startTime = System.nanoTime();
         long numRecords = 0;
         long numScannedRecords = 0;
 
         try {
-            ResultScanner scanner = _metricsTable.getScanner(scan);
 
+            ResultScanner scanner = _metricsTable.getScanner(scan);
             for (Result result = scanner.next(); result != null; result = scanner.next()) {
 
                 byte[] key = result.getRow();
@@ -445,8 +454,9 @@ public class HBaseStore implements MetricStore {
     }
 
     private Set<TimeRange> checkRequiredSettings(Metric possibleKey, HashMap<String, Object> settings) {
-        LOG.debug("Checking metric {} key {}", possibleKey, Hex.encodeHexString(((RocksDBMetric) possibleKey).getKey()));
-        byte aggLevel = ((Integer) settings.get(StringKeywords.aggLevel)).byteValue();
+
+        Integer aggValue = (Integer) settings.get(StringKeywords.aggLevel);
+        byte aggLevel = (aggValue != null) ? aggValue.byteValue() : (byte) 0;
 
         LOG.info("compare agg level: {} {}", possibleKey.getAggLevel(), aggLevel);
 
@@ -473,8 +483,19 @@ public class HBaseStore implements MetricStore {
             }
             return matchedTimeRanges.size() > 0 ? matchedTimeRanges : null;
         }
-        return null;
+        HashSet<TimeRange> ret = new HashSet<TimeRange>();
+        ret.add(new TimeRange(0L, Long.MAX_VALUE, Window.ALL));
+        return ret;
     }
 
+
+    public void close() {
+        try {
+            if (_metricsTable != null) _metricsTable.close();
+            if (_hbaseConnection != null) _hbaseConnection.close();
+        } catch (IOException e) {
+            LOG.warn("Could not close table/connection ", e);
+        }
+    }
 
 }

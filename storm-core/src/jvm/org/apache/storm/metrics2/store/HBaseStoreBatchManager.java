@@ -39,21 +39,31 @@ public class HBaseStoreBatchManager {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseStoreBatchManager.class);
 
     private List<Row> operationList;
-    private HTable table;
+    private Table table;
     private byte[] defaultColumnFamily;
     private byte[] defaultColumn;
 
 
-    public HBaseStoreBatchManager(HTable table) {
+    public HBaseStoreBatchManager(Table table) {
         this.operationList = new ArrayList<Row>();
         this.table = table;
     }
 
-    public void setTable(HTable table) {
+    public HBaseStoreBatchManager withColumnFamily(byte[] columnFamily) {
+        this.defaultColumnFamily = columnFamily;
+        return this;
+    }
+
+    public HBaseStoreBatchManager withColumn(byte[] column) {
+        this.defaultColumn = column;
+        return this;
+    }
+
+    public void setTable(Table table) {
         this.table = table;
     }
 
-    public HTable getTable() {
+    public Table getTable() {
         return table;
     }
 
@@ -116,8 +126,8 @@ public class HBaseStoreBatchManager {
     private void revert(Row op) throws IOException {
         // TODO: handle increment, append
         if (op instanceof Put) {
-            Put p = (Put) op;
-            Delete d = new Delete(p.getRow());
+            byte[] key = op.getRow();
+            Delete d = new Delete(key);
             table.delete(d);
         }
     }

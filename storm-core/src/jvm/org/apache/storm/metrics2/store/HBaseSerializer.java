@@ -196,7 +196,7 @@ public class HBaseSerializer {
             _metaTopos.put_to_topo_ids(topoIdStr, topoId);
             _revTopoIds.put(topoId, topoIdStr);
         } catch (java.io.UnsupportedEncodingException ex) {
-            LOG.error("Unsupoorted encoding!", ex);
+            LOG.error("Unsupported encoding!", ex);
             return false;
         }
         return true;
@@ -337,8 +337,8 @@ public class HBaseSerializer {
                     timestamp,
                     meta.getExec(execId),
                     meta.getComp(compId),
-                    getTopo(topoId),
                     getStream(streamId),
+                    getTopo(topoId),
                     0.0);
 
             metric.setAggLevel(aggLevel);
@@ -409,6 +409,8 @@ public class HBaseSerializer {
         String topoIdStr = (String) settings.get(StringKeywords.topoId);
         HashSet<String> metricIds = (HashSet<String>) settings.get(StringKeywords.metricSet);
         String metricIdStr = null;
+        int final_length = 2;
+
         if (metricIds != null && metricIds.size() == 1) {
             metricIdStr = metricIds.iterator().next();
         }
@@ -418,7 +420,8 @@ public class HBaseSerializer {
         String host = (String) settings.get(StringKeywords.host);
         String port = (String) settings.get(StringKeywords.port);
         String stream = (String) settings.get(StringKeywords.stream);
-        Byte aggLevel = ((Integer) settings.get(StringKeywords.aggLevel)).byteValue();
+        Integer aggValue = (Integer) settings.get(StringKeywords.aggLevel);
+        Byte aggLevel = (aggValue != null) ? aggValue.byteValue() : (byte) 0;
 
         Metadata m = getInstance(topoIdStr);
 
@@ -426,7 +429,7 @@ public class HBaseSerializer {
         bb.put((byte) 1); // non metadata
         bb.put(aggLevel);
         Set<TimeRange> timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
-        Long cur = 0L;
+        Long cur = null;
         if (timeRangeSet != null) {
             Long minTime = null;
             for (TimeRange tr : timeRangeSet) {
@@ -437,20 +440,28 @@ public class HBaseSerializer {
             cur = minTime;
         }
 
+        // TODO: fix this horseshit
         LOG.info("=> topo id str {}, topo id {}", topoIdStr, getTopoId(topoIdStr));
         bb.putInt(getTopoId(topoIdStr));
+        if (topoIdStr != null) final_length = bb.position();
         bb.putLong(cur == null ? 0L : cur.longValue());
+        if (cur != null) final_length = bb.position();
         bb.putInt(metricIdStr != null ? m.getMetricId(metricIdStr) : 0);
+        if (metricIdStr != null) final_length = bb.position();
         bb.putInt(compIdStr != null ? m.getCompId(compIdStr) : 0);
+        if (compIdStr != null) final_length = bb.position();
         bb.putInt(execIdStr != null ? m.getExecId(execIdStr) : 0);
+        if (execIdStr != null) final_length = bb.position();
         bb.putInt(host != null ? getHostId(host) : 0);
+        if (host != null) final_length = bb.position();
         bb.putLong(port != null ? Long.parseLong(port) : 0L);
+        if (port != null) final_length = bb.position();
         bb.putInt(stream != null ? getStreamId(stream) : 0);
 
         int length = bb.position();
         bb.position(0); // go to beginning
-        byte[] result = new byte[length];
-        bb.get(result, 0, length); // copy to position
+        byte[] result = new byte[final_length];
+        bb.get(result, 0, final_length); // copy to position
 
         LOG.info("Creating prefix for {}, {} {} {} {} {} {} {} {} {}\n => {}\nMeta: \n{}",
                 cur, aggLevel, topoIdStr, metricIds, metricIdStr, compIdStr, execIdStr, host, port, stream, Hex.encodeHexString(result), m);

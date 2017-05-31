@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -40,7 +40,7 @@ public class MetricStoreConfig {
 
         try {
             validateConfig(conf);
-        } catch (MetricException e){
+        } catch (MetricException e) {
             System.out.println(e);
         }
 
@@ -50,12 +50,12 @@ public class MetricStoreConfig {
         MetricStore store;
         try {
             Class<?> klass = (Class.forName(storeClass));
-            store = (MetricStore)(Class.forName(storeClass)).newInstance();
+            store = (MetricStore) (Class.forName(storeClass)).newInstance();
             store.prepare(conf);
             return store;
 
         } catch (Exception e) {
-            System.out.println(e);
+            System.out.println(e + "-" + storeClass);
             return null;
         }
     }
@@ -65,9 +65,9 @@ public class MetricStoreConfig {
      * @param conf Storm config map
      * @throws MetricException
      */
-    private static void validateConfig(Map conf) throws MetricException{
-        if (!(conf.containsKey("storm.metrics2.store.connector_class"))) {
-            throw new MetricException("Not a vaild metrics configuration - Missing store type");
+    private static void validateConfig(Map conf) throws MetricException {
+        if (!(conf.containsKey("storm.metrics2.store.class"))) {
+            throw new MetricException("Not a valid metrics configuration - Missing store type");
         }
     }
 }
