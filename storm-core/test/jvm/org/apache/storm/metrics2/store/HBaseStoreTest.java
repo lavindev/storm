@@ -18,7 +18,9 @@
 package org.apache.storm.metrics2.store;
 
 
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -29,7 +31,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.*;
+
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -45,13 +49,15 @@ public class HBaseStoreTest {
 
     private final static String HBASE_ROOT_DIR = "/tmp/hbase";
     private final static String SCHEMA = "compact";
-    private final static String HBASE_METRICS_TABLE = "metrics";
+    private final static String HBASE_METRICS_TABLE = "testMetrics";
     private final static int RETENTION = 1;
     private final static String RETENTION_UNITS = "MINUTES";
     private final static String ZOOKEEPER_ROOT = "/storm";
     private final static List<String> ZOOKEEPER_SERVERS = Arrays.asList("localhost");
     private final static int ZOOKEEPER_PORT = 2181;
 
+    private HBaseStore store;
+    private Map conf;
 
     private Map makeConfig() {
 
@@ -70,29 +76,31 @@ public class HBaseStoreTest {
     }
 
     private Metric makeMetric() {
-        long ts = (long) Time.currentTimeSecs();
+        long ts = new Date().getTime();
         return makeMetric(ts);
     }
 
     private Metric makeMetric(long ts) {
 
-        return new Metric("testMetric" + ts, ts,
+        Metric m = new Metric("testMetric" + ts, ts,
                 "testExecutor" + ts,
                 "testComp" + ts,
-                "testTopo" + ts,
                 "testStream" + ts,
+                "testTopo" + ts,
                 123.45);
+        m.setHost("testHost" + ts);
+        return m;
     }
 
     private Metric makeAggMetric() {
-        long ts = (long) Time.currentTimeSecs();
+        long ts = new Date().getTime();
         return makeAggMetric(ts);
     }
 
     private Metric makeAggMetric(long ts) {
 
         Metric m = makeMetric(ts);
-        m.setAggLevel((byte) 1);
+        m.setAggLevel((byte) 60);
         m.setValue(100.0);
 
         for (int i = 1; i < 10; ++i) {
@@ -102,21 +110,28 @@ public class HBaseStoreTest {
         return m;
     }
 
+    @Before
+    public void setUp() {
+        this.store = new HBaseStore();
+        this.conf = makeConfig();
+    }
+
+    @After
+    public void tearDown() {
+        store.close();
+    }
+
     @Test
     public void testPrepare() {
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
         try {
             store.prepare(conf);
         } catch (Exception e) {
-            fail("Unexpected exception" + e);
+            fail("Unexpected exception " + e);
         }
     }
 
     @Test
     public void testPrepareInvalidConf() {
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
 
         // call prepare() with one config entry missing each iteration
         for (Object key : conf.keySet()) {
@@ -135,13 +150,33 @@ public class HBaseStoreTest {
     }
 
     @Test
+    public void testPutGet() {
+
+        final byte[] key = Bytes.toBytes("testKey");
+        final byte[] value = Bytes.toBytes("testValue");
+        byte[] lookup = new byte[value.length];
+
+        try {
+            store.prepare(conf);
+        } catch (MetricException e) {
+            fail("Unexpected Exception" + e);
+        }
+
+        try {
+            store.put(key, value);
+            lookup = store.get(key);
+        } catch (IOException e) {
+            fail("Unexpected Exception " + e);
+        }
+
+        assertEquals(Bytes.toString(value), Bytes.toString(lookup));
+    }
+
+    @Test
     public void testInsert() {
 
         Logger log = Mockito.mock(Logger.class);
-
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
-        Metric m = makeMetric();
+        Metric m = makeMetric(12345);
 
         try {
             store.prepare(conf);
@@ -150,16 +185,18 @@ public class HBaseStoreTest {
         }
 
         store.insert(m);
+
+        // Assertions/Verifications
+
         Mockito.verifyZeroInteractions(log);
+
+        // TODO: do an actual lookup? need key
     }
 
     @Test
     public void testInsertAgg() {
 
         Logger log = Mockito.mock(Logger.class);
-
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
         Metric m = makeAggMetric();
 
         try {
@@ -170,7 +207,66 @@ public class HBaseStoreTest {
 
         store.insert(m);
         Mockito.verifyZeroInteractions(log);
+
     }
 
+    @Test
+    public void testPopulateValue() {
+
+        try {
+            store.prepare(conf);
+        } catch (MetricException e) {
+            fail("Unexpected Exception" + e);
+        }
+
+        Metric m = makeMetric(999);
+        store.insert(m);
+        m.setValue(0.00);
+        m.setCount(0);
+        store.populateValue(m);
+        assertNotEquals(m.getValue(), 0.00, 0.0001);
+        assertNotEquals(m.getCount(), 0);
+    }
+
+    @Test
+    public void testPopulateValueAgg() {
+
+        try {
+            store.prepare(conf);
+        } catch (MetricException e) {
+            fail("Unexpected Exception" + e);
+        }
+
+        Metric m = makeAggMetric(1000);
+        store.insert(m);
+        m.setValue(0.00);
+        m.setCount(0);
+
+        store.populateValue(m);
+        assertNotEquals(m.getCount(), 0);
+        assertNotEquals(m.getValue(), 0.00, 0.0001);
+        assertNotEquals(m.getSum(), 0.00, 0.0001);
+        assertNotEquals(m.getMin(), 0.00, 0.0001);
+        assertNotEquals(m.getMax(), 0.00, 0.0001);
+
+    }
+
+    @Test
+    public void testScanSimple() {
+
+        try {
+            store.prepare(conf);
+        } catch (MetricException e) {
+            fail("Unexpected Exception" + e);
+        }
+
+        store.insert(makeMetric(1));
+        store.insert(makeMetric(2));
+        store.insert(makeMetric(3));
+        store.insert(makeMetric(4));
+
+        store.scan((metric, timeRanges) -> System.out.println(metric.toString()));
+
+    }
 
 }

@@ -58,7 +58,6 @@ public class HBaseStore implements MetricStore {
     private byte[] COLUMN_MAX;
 
     private Connection _hbaseConnection = null;
-    private Admin _hbaseAdmin = null;
     private Table _metricsTable = null;
     private HBaseSerializer _serializer = null;
 
@@ -84,9 +83,9 @@ public class HBaseStore implements MetricStore {
         // connect
         try {
             this._hbaseConnection = ConnectionFactory.createConnection(hbaseConf);
-            this._hbaseAdmin = _hbaseConnection.getAdmin();
-            if (!_hbaseAdmin.tableExists(tableDesc.getTableName())) {
-                _hbaseAdmin.createTable(tableDesc);
+            Admin hbaseAdmin = _hbaseConnection.getAdmin();
+            if (!hbaseAdmin.tableExists(tableDesc.getTableName())) {
+                hbaseAdmin.createTable(tableDesc);
             }
             this._metricsTable = _hbaseConnection.getTable(tableDesc.getTableName());
             // TODO: pass values
@@ -269,9 +268,8 @@ public class HBaseStore implements MetricStore {
             LOG.error("Error loading metadata", ex);
         }
 
-        if (settings.containsKey(StringKeywords.timeRangeSet)){
+        if (settings.containsKey(StringKeywords.timeRangeSet)) {
             Set<TimeRange> timeRanges = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
-            System.out.println(settings.toString());
         }
 
         byte[] prefix = _serializer.createPrefix(settings);
@@ -456,7 +454,7 @@ public class HBaseStore implements MetricStore {
     private Set<TimeRange> checkRequiredSettings(Metric possibleKey, HashMap<String, Object> settings) {
 
         Integer aggValue = (Integer) settings.get(StringKeywords.aggLevel);
-        byte aggLevel = (aggValue != null) ? aggValue.byteValue() : (byte) 0;
+        byte aggLevel = (aggValue != null) ? aggValue.byteValue() : (byte) 1;
 
         LOG.info("compare agg level: {} {}", possibleKey.getAggLevel(), aggLevel);
 
@@ -483,9 +481,8 @@ public class HBaseStore implements MetricStore {
             }
             return matchedTimeRanges.size() > 0 ? matchedTimeRanges : null;
         }
-        HashSet<TimeRange> ret = new HashSet<TimeRange>();
-        ret.add(new TimeRange(0L, Long.MAX_VALUE, Window.ALL));
-        return ret;
+        LOG.warn("No time range provided");
+        return null;
     }
 
 
