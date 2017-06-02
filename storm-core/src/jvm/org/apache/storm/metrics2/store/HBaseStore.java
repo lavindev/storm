@@ -43,22 +43,24 @@ public class HBaseStore implements MetricStore {
     private final static String RETENTION_KEY = BASE_CONFIG_KEY + ".retention";
     private final static String RETENTION_UNIT_KEY = BASE_CONFIG_KEY + ".retention.units";
     private final static String HBASE_ROOT_DIR_KEY = BASE_CONFIG_KEY + ".hbase.root_dir";
-    private final static String HBASE_METRICS_TABLE_KEY = BASE_CONFIG_KEY + ".hbase.metrics_table";
     private final static String ZOOKEEPER_SERVERS_KEY = "storm.zookeeper.servers";
     private final static String ZOOKEEPER_PORT_KEY = "storm.zookeeper.port";
     private final static String ZOOKEEPER_ROOT_KEY = "storm.zookeeper.root";
+    private final static String HBASE_META_TABLE_KEY = BASE_CONFIG_KEY + ".hbase.metrics_table";
+    private final static String HBASE_META_CF_KEY = BASE_CONFIG_KEY + ".hbase.meta_cf";
+    private final static String HBASE_META_COL_KEY = BASE_CONFIG_KEY + ".hbase.meta_column";
+    private final static String HBASE_METRICS_TABLE_KEY = BASE_CONFIG_KEY + ".hbase.metrics_table";
+    private final static String HBASE_METRICS_CF_KEY = BASE_CONFIG_KEY + ".hbase.metrics_cf";
+    private final static String HBASE_METRICS_VALUE_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_value_column";
+    private final static String HBASE_METRICS_COUNT_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_count_column";
+    private final static String HBASE_METRICS_SUM_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_sum_column";
+    private final static String HBASE_METRICS_MIN_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_min_column";
+    private final static String HBASE_METRICS_MAX_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_max_column";
 
-    private byte[] COLUMN_FAMILY;
-    private byte[] COLUMN_VALUE;
-    private byte[] COLUMN_COUNT;
-    private byte[] COLUMN_SUM;
-    private byte[] COLUMN_MIN;
-    private byte[] COLUMN_MAX;
-
-    private Connection _hbaseConnection = null;
-    private Admin _hbaseAdmin = null;
-    private HTable _metricsTable = null;
-    private HBaseSerializer _serializer = null;
+    private Connection _hbaseConnection;
+    private HBaseSchema _schema;
+    private HBaseSerializer _serializer;
+    private Table _metricsTable;
 
     /**
      * Create HBase instance
@@ -69,31 +71,52 @@ public class HBaseStore implements MetricStore {
     @Override
     public void prepare(Map config) throws MetricException {
 
-
         validateConfig(config);
-        // setup
-        initializeSchema(config);
-        Configuration hbaseConf = createHBaseConfiguration(config);
-        HTableDescriptor tableDesc = createMetricsTableDescriptor(config);
-        // TODO: pass values
-        this._serializer = new HBaseSerializer();
 
-        // connect
+        this._schema = new HBaseSchema(config);
+        Configuration hbaseConf = createHBaseConfiguration(config);
+
         try {
             this._hbaseConnection = ConnectionFactory.createConnection(hbaseConf);
-            this._hbaseAdmin = _hbaseConnection.getAdmin();
-            if (!_hbaseAdmin.tableExists(tableDesc.getTableName())) {
-                _hbaseAdmin.createTable(tableDesc);
+            Admin hbaseAdmin = _hbaseConnection.getAdmin();
+            TableName name = _schema.metricsTableInfo.getTableName();
+            HTableDescriptor descriptor = _schema.metricsTableInfo.getDescriptor();
+
+            if (!hbaseAdmin.tableExists(name)) {
+                hbaseAdmin.createTable(descriptor);
             }
 
-            // TODO: fix init, deprecated
-            this._metricsTable = new HTable(tableDesc.getTableName(), _hbaseConnection);
-
+            this._metricsTable = _hbaseConnection.getTable(_schema.metricsTableInfo.getTableName());
+            this._serializer = new HBaseSerializer(_hbaseConnection, _schema);
         } catch (IOException e) {
-            LOG.error("HBase Metrics initialization error ", e);
+            throw new MetricException("Could not connect to hbase " + e);
         }
 
     }
+
+    private void validateConfig(Map config) throws MetricException {
+        // TODO: add rest of validation
+
+        if (!(config.containsKey(HBASE_ROOT_DIR_KEY))) {
+            throw new MetricException("Need HBase root dir");
+        }
+        if (!(config.containsKey(HBASE_METRICS_TABLE_KEY))) {
+            throw new MetricException("Need HBase metrics table");
+        }
+        if (!(config.containsKey(RETENTION_KEY) && config.containsKey(RETENTION_UNIT_KEY))) {
+            throw new MetricException("Need retention value/units");
+        }
+        if (!(config.containsKey(ZOOKEEPER_ROOT_KEY))) {
+            throw new MetricException("Need ZooKeeper Root/Data directory");
+        }
+        if (!(config.containsKey(ZOOKEEPER_SERVERS_KEY))) {
+            throw new MetricException("Need ZooKeeper servers list");
+        }
+        if (!(config.containsKey(ZOOKEEPER_PORT_KEY))) {
+            throw new MetricException("Need ZooKeeper port");
+        }
+    }
+
 
     private Configuration createHBaseConfiguration(Map config) {
         // TODO: read from config, fix cast?
@@ -112,50 +135,6 @@ public class HBaseStore implements MetricStore {
         return conf;
     }
 
-    private HTableDescriptor createMetricsTableDescriptor(Map config) {
-
-        String name = (String) config.get(HBASE_METRICS_TABLE_KEY);
-        TableName tableName = TableName.valueOf(name);
-        HColumnDescriptor columnFamily = new HColumnDescriptor(COLUMN_FAMILY);
-
-        HTableDescriptor descriptor = new HTableDescriptor(tableName);
-        descriptor.addFamily(columnFamily);
-
-        return descriptor;
-    }
-
-    private void initializeSchema(Map config) {
-        // TODO: config
-        this.COLUMN_FAMILY = Bytes.toBytes("c");
-        this.COLUMN_VALUE = Bytes.toBytes("v");
-        this.COLUMN_COUNT = Bytes.toBytes("c");
-        this.COLUMN_SUM = Bytes.toBytes("s");
-        this.COLUMN_MIN = Bytes.toBytes("i");
-        this.COLUMN_MAX = Bytes.toBytes("a");
-    }
-
-
-    private void validateConfig(Map config) throws MetricException {
-        // TODO: check values, fix error strings
-        if (!(config.containsKey(HBASE_ROOT_DIR_KEY))) {
-            throw new MetricException("Need hbase root dir");
-        }
-        if (!(config.containsKey(HBASE_METRICS_TABLE_KEY))) {
-            throw new MetricException("Need hbase metrics table");
-        }
-        if (!(config.containsKey(RETENTION_KEY) && config.containsKey(RETENTION_UNIT_KEY))) {
-            throw new MetricException("Need retention value/units");
-        }
-        if (!(config.containsKey(ZOOKEEPER_ROOT_KEY))) {
-            throw new MetricException("Need ZooKeeper Root/Data directory");
-        }
-        if (!(config.containsKey(ZOOKEEPER_SERVERS_KEY))) {
-            throw new MetricException("Need ZooKeeper servers list");
-        }
-        if (!(config.containsKey(ZOOKEEPER_PORT_KEY))) {
-            throw new MetricException("Need ZooKeeper port");
-        }
-    }
 
     /**
      * Stores metrics in the store
@@ -164,106 +143,49 @@ public class HBaseStore implements MetricStore {
      */
     @Override
     public void insert(Metric m) {
-
-        byte[] key = _serializer.serializeKey(m);
-        long count = m.getCount();
-
-        Put newEntry = new Put(key);
-
-        byte[] mValue = Bytes.toBytes(m.getValue());
-        newEntry.addColumn(COLUMN_FAMILY, COLUMN_VALUE, mValue);
-
-        if (count > 1) {
-            byte[] mCount = Bytes.toBytes(count);
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_COUNT, mCount);
-
-            byte[] mSum = Bytes.toBytes(m.getSum());
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_SUM, mSum);
-
-            byte[] mMin = Bytes.toBytes(m.getMin());
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_MIN, mMin);
-
-            byte[] mMax = Bytes.toBytes(m.getMax());
-            newEntry.addColumn(COLUMN_FAMILY, COLUMN_MAX, mMax);
-        }
-
         try {
-            _metricsTable.put(newEntry);
-        } catch (IOException e) {
-            LOG.error("Could not insert metric", e, "// m =", m.toString());
+            Put p = _serializer.createPutOperation(m);
+            _metricsTable.put(p);
+        } catch (MetricException | IOException e) {
+            LOG.error("Could not insert metric ", e);
         }
-
     }
 
     /**
      * Scans all metrics in the store
      *
+     * @param agg
      * @return void
      */
     @Override
     public void scan(IAggregator agg) {
-        System.out.println("Not implemented - scan");
-    }
 
+        HashMap<String, Object> settings = new HashMap<String, Object>();
+        scan(settings, agg);
+
+    }
 
     /**
      * Implements scan method of the Metrics Store, scans all metrics with settings in the store
      * Will try to search the fastest way possible
      *
      * @param settings map of settings to search by
+     * @param agg
      * @return List<Double> metrics in store
      */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg) {
-        System.out.println("Not implemented - scan2");
     }
 
-    // get by matching a key exactly
+
     @Override
     public boolean populateValue(Metric metric) {
-        byte[] key = _serializer.serializeKey(metric);
-
-        Get g = new Get(key);
-        try {
-            Result entry = _metricsTable.get(g);
-
-            if (!entry.getExists())
-                return false;
-
-            byte[] value = entry.getValue(COLUMN_FAMILY, COLUMN_VALUE);
-            if (value != null)
-                metric.setValue(Bytes.toDouble(value));
-
-            byte[] count = entry.getValue(COLUMN_FAMILY, COLUMN_COUNT);
-            if (count != null)
-                metric.setCount(Bytes.toLong(count));
-            else
-                metric.setCount(1);
-
-            byte[] sum = entry.getValue(COLUMN_FAMILY, COLUMN_SUM);
-            if (sum != null)
-                metric.setValue(Bytes.toDouble(sum));
-
-            byte[] min = entry.getValue(COLUMN_FAMILY, COLUMN_MIN);
-            if (min != null)
-                metric.setValue(Bytes.toDouble(min));
-
-            byte[] max = entry.getValue(COLUMN_FAMILY, COLUMN_MAX);
-            if (max != null)
-                metric.setValue(Bytes.toDouble(max));
-
-            return true;
-
-        } catch (IOException e) {
-            LOG.error("Could not retrieve metric", e);
-            return false;
-        }
+        return false;
     }
 
-    // remove things matching settings, kind of like a scan but much scarier
     @Override
     public void remove(HashMap<String, Object> settings) {
-        System.out.println("Not implemented - remove");
+
     }
 
 }

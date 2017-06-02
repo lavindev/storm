@@ -18,6 +18,7 @@
 package org.apache.storm.metrics2.store;
 
 
+import clojure.lang.Obj;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -64,6 +65,40 @@ public class HBaseStoreTest {
         confMap.put("storm.zookeeper.port", ZOOKEEPER_PORT);
         confMap.put("storm.zookeeper.root", ZOOKEEPER_ROOT);
 
+        // metadata map
+        HashMap<String, Object> metaDataMap = new HashMap<String, Object>();
+        List<String> metadataNames = Arrays.asList("topoMap", "streamMap", "hostMap",
+                "compMap", "metricMap", "executorMap");
+
+        metadataNames.forEach((name) -> {
+            HashMap<String, String> m = new HashMap<String, String>();
+            m.put("name", name);
+            m.put("cf", "c");
+            m.put("column", "c");
+            metaDataMap.put(name, m);
+        });
+
+        // columns map & metrics map
+        HashMap<String, String> columnsMap = new HashMap<String, String>();
+        columnsMap.put("value", "v");
+        columnsMap.put("sum", "s");
+        columnsMap.put("count", "c");
+        columnsMap.put("min", "i");
+        columnsMap.put("max", "a");
+
+        HashMap<String, Object> metricsMap = new HashMap<String, Object>();
+        metricsMap.put("name", "metrics");
+        metricsMap.put("cf", "c");
+        metricsMap.put("columns", columnsMap);
+
+        // schema map
+        HashMap<String, Object> schemaMap = new HashMap<String, Object>();
+        schemaMap.put("metrics", metricsMap);
+        schemaMap.put("metadata", metaDataMap);
+
+        confMap.put("storm.metrics2.store.HBaseStore.hbase.schema", schemaMap);
+
+
         return confMap;
     }
 
@@ -74,12 +109,14 @@ public class HBaseStoreTest {
 
     private Metric makeMetric(long ts) {
 
-        return new Metric("testMetric" + ts, ts,
+        Metric m = new Metric("testMetric" + ts, ts,
                 "testExecutor" + ts,
                 "testComp" + ts,
-                "testTopo" + ts,
                 "testStream" + ts,
+                "testTopo" + ts,
                 123.45);
+        m.setHost("testHost" + ts);
+        return m;
     }
 
     private Metric makeAggMetric() {
