@@ -176,7 +176,7 @@ public class HBaseStoreTest {
 
         HBaseStore store = new HBaseStore();
         Map conf = makeConfig();
-        Metric m = makeMetric();
+        Metric m = makeMetric(1234567);
 
         try {
             store.prepare(conf);
@@ -195,7 +195,7 @@ public class HBaseStoreTest {
 
         HBaseStore store = new HBaseStore();
         Map conf = makeConfig();
-        Metric m = makeAggMetric();
+        Metric m = makeAggMetric(1234567);
 
         try {
             store.prepare(conf);

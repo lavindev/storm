@@ -22,17 +22,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
+import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.HConstants;
 
@@ -100,9 +95,6 @@ public class HBaseStore implements MetricStore {
         if (!(config.containsKey(HBASE_ROOT_DIR_KEY))) {
             throw new MetricException("Need HBase root dir");
         }
-        if (!(config.containsKey(HBASE_METRICS_TABLE_KEY))) {
-            throw new MetricException("Need HBase metrics table");
-        }
         if (!(config.containsKey(RETENTION_KEY) && config.containsKey(RETENTION_UNIT_KEY))) {
             throw new MetricException("Need retention value/units");
         }
@@ -116,7 +108,6 @@ public class HBaseStore implements MetricStore {
             throw new MetricException("Need ZooKeeper port");
         }
     }
-
 
     private Configuration createHBaseConfiguration(Map config) {
         // TODO: read from config, fix cast?
@@ -159,10 +150,8 @@ public class HBaseStore implements MetricStore {
      */
     @Override
     public void scan(IAggregator agg) {
-
         HashMap<String, Object> settings = new HashMap<String, Object>();
         scan(settings, agg);
-
     }
 
     /**
@@ -175,17 +164,139 @@ public class HBaseStore implements MetricStore {
      */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg) {
+
+        List<Scan> scanList = _serializer.createScanOperation(settings);
+
+        scanList.forEach(s -> {
+
+            int numRecordsScanned = 0;
+            int numRecordsMatched = 0;
+            ResultScanner scanner = null;
+            try {
+                scanner = _metricsTable.getScanner(s);
+            } catch (IOException e) {
+                LOG.error("Could not scan metrics table ", e);
+                return;
+            }
+
+            for (Result result : scanner) {
+                ++numRecordsScanned;
+                Metric metric = _serializer.deserializeMetric(result);
+                Set<TimeRange> timeRanges = getTimeRanges(metric, settings);
+                if (checkMetric(metric, settings)) {
+                    ++numRecordsMatched;
+                    agg.agg(metric, timeRanges);
+                }
+            }
+            LOG.info("Scanned {} records, matched {} records", numRecordsScanned, numRecordsMatched);
+            scanner.close();
+        });
+    }
+
+    private Set<TimeRange> getTimeRanges(Metric m, HashMap<String, Object> settings) {
+
+        Set<TimeRange> timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
+
+        if (timeRangeSet != null) {
+            Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
+
+            timeRangeSet.forEach(timeRange -> {
+                Long metricTimeStamp = m.getTimeStamp();
+                if (timeRange.contains(metricTimeStamp))
+                    matchedTimeRanges.add(timeRange);
+            });
+
+            if (matchedTimeRanges.isEmpty()) {
+                LOG.info("DOES NOT MATCH time ranges");
+            }
+
+            return matchedTimeRanges.isEmpty() ? null : matchedTimeRanges;
+        }
+
+        return null;
+    }
+
+    private boolean checkMetric(Metric m, HashMap<String, Object> settings) {
+
+        // TODO: absolute mess, fix this
+        LOG.info("Checking {}", m);
+
+        if (settings.containsKey(StringKeywords.aggLevel) &&
+                (m.getAggLevel() == null ||
+                        !m.getAggLevel().equals(((Integer) settings.get(StringKeywords.aggLevel)).byteValue()))) {
+
+            LOG.info("DOES NOT MATCH agg level: {} {}", m.getAggLevel(), ((Integer) settings.get(StringKeywords.aggLevel)).byteValue());
+            return false;
+
+        } else if (settings.containsKey(StringKeywords.topoId) &&
+                !m.getTopoIdStr().equals(settings.get(StringKeywords.topoId))) {
+
+            LOG.info("DOES NOT MATCH topo {} {}", m.getTopoIdStr(), settings.get(StringKeywords.topoId));
+            return false;
+
+        } else if (settings.containsKey(StringKeywords.component) &&
+                !m.getCompName().equals(settings.get(StringKeywords.component))) {
+
+            LOG.info("Not the right component {}", m.getCompName());
+            return false;
+
+        } else if (settings.containsKey(StringKeywords.metricSet) &&
+                !((HashSet<String>) settings.get(StringKeywords.metricSet)).contains(m.getMetricName())) {
+
+            LOG.info("Not the right metric name {}", m.getMetricName());
+            return false;
+        }
+        return true;
     }
 
 
     @Override
     public boolean populateValue(Metric metric) {
-        return false;
+
+        byte[] key;
+
+        try {
+            key = _serializer.createKey(metric);
+        } catch (MetricException e) {
+            LOG.error("Bad metric passed to populateValue " + e);
+            return false;
+        }
+
+        try {
+            Get g = new Get(key);
+            Result result = _metricsTable.get(g);
+            return _serializer.populateMetricValue(metric, result);
+        } catch (IOException e) {
+            LOG.error("Could not read from database ", e);
+            return false;
+        }
+
     }
 
     @Override
     public void remove(HashMap<String, Object> settings) {
 
+        ArrayList<Row> metricsToRemove = new ArrayList<>();
+
+        scan(settings, (metric, timeRanges) -> {
+            try {
+                byte[] key = _serializer.createKey(metric);
+                Delete d = new Delete(key);
+                metricsToRemove.add(d);
+            } catch (MetricException e) {
+                LOG.error("Could not create key ", e);
+            }
+        });
+
+        Result[] results = new Result[metricsToRemove.size()];
+
+        try {
+            _metricsTable.batch(metricsToRemove, results);
+        } catch (IOException | InterruptedException e) {
+            LOG.error("Could not delete metrics " + e);
+        }
+
     }
+
 
 }

@@ -22,14 +22,19 @@ import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.client.coprocessor.AggregationClient;
+import org.apache.hadoop.hbase.util.ByteBufferArray;
+import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hdfs.util.ByteArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.*;
 
+import static java.lang.Integer.max;
+import static java.lang.Integer.min;
 import static org.apache.storm.metrics2.store.HBaseSerializer.MetaDataIndex.*;
 
 public class HBaseSerializer {
@@ -67,7 +72,6 @@ public class HBaseSerializer {
     private final static byte[] REFCOUNTER = Bytes.toBytes("REFCOUNTER");
 
     private Connection _hbaseConnection;
-    private AggregationClient _aggregationClient;
     private HBaseSchema _schema;
 
     private Table metricsTable;
@@ -78,7 +82,6 @@ public class HBaseSerializer {
         // TODO: fix configuration lookup
         this._hbaseConnection = hbaseConnection;
         Configuration conf = hbaseConnection.getConfiguration();
-        this._aggregationClient = new AggregationClient(conf);
         this._schema = schema;
         this.metaData = new MetaData[MetaDataIndex.count()];
 
@@ -151,6 +154,9 @@ public class HBaseSerializer {
                 byte[] key = result.getRow();
                 byte[] value = result.getValue(columnFamily, column);
 
+                // NOTE: key REFCOUNTER stores a long
+                // valueInteger returns int from upper 4 bytes of stored long
+                // Thus, REFCOUNTER value in local map will always be incorrect
                 String keyString = Bytes.toString(key);
                 Integer valueInteger = Bytes.toInt(value);
 
@@ -189,12 +195,12 @@ public class HBaseSerializer {
         }
 
         // get ref counter
-        long counter;
+        Integer counter;
         Increment inc = new Increment(REFCOUNTER);
         inc.setReturnResults(true);
 
         try {
-            counter = meta.table.incrementColumnValue(REFCOUNTER, columnFamily, column, 1);
+            counter = (int) meta.table.incrementColumnValue(REFCOUNTER, columnFamily, column, 1);
         } catch (IOException e) {
             LOG.error("Could not get column ref", e);
             return null;
@@ -211,7 +217,7 @@ public class HBaseSerializer {
             return null;
         }
 
-        return (int) counter;
+        return counter;
 
     }
 
@@ -219,17 +225,31 @@ public class HBaseSerializer {
 
         int i = metaIndex.ordinal();
         MetaData meta = metaData[i];
-        Integer ref = null;
+        Integer ref;
 
-        if (!meta.map.containsKey(key)) {
+        if (!meta.map.containsKey(key) && key != null) {
             ref = insertNewMapping(key, metaIndex);
             meta.map.put(key, ref);
             meta.rmap.put(ref, key);
+        } else {
+            ref = meta.map.get(key);
         }
 
         return ref;
     }
 
+    private String getReverseRef(MetaDataIndex metaIndex, Integer ref) {
+
+        int i = metaIndex.ordinal();
+        MetaData meta = metaData[i];
+
+        if (!meta.rmap.containsKey(ref) && ref != null) {
+            // reload map from store
+            initializeMap(metaIndex);
+        }
+
+        return meta.rmap.get(ref);
+    }
 
     public Put createPutOperation(Metric m) throws MetricException {
 
@@ -259,8 +279,7 @@ public class HBaseSerializer {
         return p;
     }
 
-
-    private byte[] createKey(Metric m) throws MetricException {
+    public byte[] createKey(Metric m) throws MetricException {
         Integer topoId = getRef(TOPOLOGY, m.getTopoIdStr());
         Integer streamId = getRef(STREAM, m.getStream());
         Integer hostId = getRef(HOST, m.getHost());
@@ -291,6 +310,313 @@ public class HBaseSerializer {
         bb.get(key, 0, length);
 
         return key;
+    }
+
+    public boolean populateMetricKey(Metric m, Result result) {
+
+        byte[] key = result.getRow();
+        ByteBuffer bb = ByteBuffer.allocate(41);
+        bb.put(key);
+
+        Byte aggLevel = bb.get();
+        Integer topoId = bb.getInt();
+        long timeStamp = bb.getLong();
+        Integer streamId = bb.getInt();
+        Integer hostId = bb.getInt();
+        Integer compId = bb.getInt();
+        Integer metricNameId = bb.getInt();
+        long port = bb.getLong();
+        Integer executorId = bb.getInt();
+
+        String topoIdStr = getReverseRef(TOPOLOGY, topoId);
+        String compIdStr = getReverseRef(COMP, compId);
+        String execIdStr = getReverseRef(EXECUTOR, executorId);
+        String hostIdStr = getReverseRef(HOST, hostId);
+        String metricNameStr = getReverseRef(METRICNAME, metricNameId);
+        String streamIdStr = getReverseRef(STREAM, streamId);
+
+        m.setAggLevel(aggLevel);
+        m.setTopoIdStr(topoIdStr);
+        m.setTimeStamp(timeStamp);
+        m.setMetricName(metricNameStr);
+        m.setCompName(compIdStr);
+        m.setExecutor(execIdStr);
+        m.setHost(hostIdStr);
+        m.setPort(port);
+        m.setStream(streamIdStr);
+
+        return true;
+    }
+
+    public boolean populateMetricValue(Metric m, Result result) {
+        // TODO: avoid uncecessary lookup
+
+        HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
+        byte[] cf = info.getColumnFamily();
+
+        byte[] valueBytes = result.getValue(cf, info.getValueColumn());
+        byte[] countBytes = result.getValue(cf, info.getCountColumn());
+        byte[] sumBytes = result.getValue(cf, info.getSumColumn());
+        byte[] minBytes = result.getValue(cf, info.getMinColumn());
+        byte[] maxBytes = result.getValue(cf, info.getMaxColumn());
+
+        try {
+            double value = Bytes.toDouble(valueBytes);
+            long count = Bytes.toLong(countBytes);
+
+            if (count > 1) {
+                double sum = Bytes.toDouble(sumBytes);
+                double min = Bytes.toDouble(minBytes);
+                double max = Bytes.toDouble(maxBytes);
+
+                m.setSum(sum);
+                m.setMin(min);
+                m.setMax(max);
+            }
+
+            m.setValue(value);
+            m.setCount(count);
+
+            return true;
+        } catch (NullPointerException e) {
+            m.setCount(0L);
+            m.setValue(0.00);
+            m.setSum(0.00);
+            m.setMin(0.00);
+            m.setMax(0.00);
+            return false;
+        }
+
+
+    }
+
+    public List<Scan> createScanOperation(HashMap<String, Object> settings) {
+
+        // grab values from map
+        Integer aggLevel = (Integer) settings.get(StringKeywords.aggLevel);
+        String topoIdStr = (String) settings.get(StringKeywords.topoId);
+        String compIdStr = (String) settings.get(StringKeywords.component);
+        String execIdStr = (String) settings.get(StringKeywords.executor);
+        String hostIdStr = (String) settings.get(StringKeywords.host);
+        String portStr = (String) settings.get(StringKeywords.port);
+        String streamIdStr = (String) settings.get(StringKeywords.stream);
+        HashSet<String> metricStrSet = (HashSet<String>) settings.get(StringKeywords.metricSet);
+        Set<TimeRange> timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
+
+        // convert strings to Integer references
+        Integer topoId = getRef(TOPOLOGY, topoIdStr);
+        Integer compId = getRef(COMP, compIdStr);
+        Integer execId = getRef(EXECUTOR, execIdStr);
+        Integer hostId = getRef(HOST, hostIdStr);
+        Integer streamId = getRef(STREAM, streamIdStr);
+        Long port = (portStr == null) ? null : Long.parseLong(portStr);
+        HashSet<Integer> metricIds = new HashSet<>(metricStrSet.size());
+        metricStrSet.forEach(metrcIdStr -> {
+            metricIds.add(getRef(METRICNAME, metrcIdStr));
+        });
+
+        HBaseStoreScan scan = new HBaseStoreScan()
+                .withAggLevel(aggLevel)
+                .withTopoId(topoId)
+                .withTimeRange(timeRangeSet)
+                .withMetricSet(metricIds)
+                .withCompId(compId)
+                .withExecutorId(execId)
+                .withHostId(hostId)
+                .withPort(port)
+                .withStreamId(streamId);
+
+        return scan.getScanList();
+    }
+
+    private int getPrefixLength(HashMap<String, Object> settings) {
+
+        if (!settings.containsKey(StringKeywords.aggLevel))
+            return 0;
+
+        if (!settings.containsKey(StringKeywords.topoId))
+            return 1;
+
+        if (!settings.containsKey(StringKeywords.timeRangeSet))
+            return 5;
+
+        if (!settings.containsKey(StringKeywords.metricSet))
+            return 13;
+
+        if (!settings.containsKey(StringKeywords.component))
+            return 17;
+
+        if (!settings.containsKey(StringKeywords.executor))
+            return 21;
+
+        if (!settings.containsKey(StringKeywords.host))
+            return 25;
+
+        if (!settings.containsKey(StringKeywords.port))
+            return 29;
+
+        if (!settings.containsKey(StringKeywords.stream))
+            return 37;
+
+        return 41;
+    }
+
+    public Metric deserializeMetric(Result result) {
+        Metric m = new Metric();
+        populateMetricKey(m, result);
+        populateMetricValue(m, result);
+        return m;
+    }
+
+    private class HBaseStoreScan {
+
+        private final static int PRE_START_OFFSET = 0;
+        private final static int PRE_LENGTH = 13;
+        private final static int POST_START_OFFSET = 17;
+        private final static int POST_LENGTH = 24;
+        private final static int METRIC_OFFSET = 13;
+        private final static int METRIC_LENGTH = 4;
+
+
+        private ArrayList<Scan> scanList;
+        private ByteBuffer pre;
+        private ByteBuffer post;
+        private int prefixLength;
+        private HashSet<Integer> metricIds;
+
+        public HBaseStoreScan() {
+            pre = ByteBuffer.allocate(PRE_LENGTH);
+            post = ByteBuffer.allocate(POST_LENGTH);
+            prefixLength = 0;
+        }
+
+        public HBaseStoreScan withAggLevel(Integer aggLevel) {
+            if (aggLevel != null) {
+                pre.put(aggLevel.byteValue());
+                prefixLength = 1;
+            }
+            return this;
+        }
+
+        public HBaseStoreScan withTopoId(Integer topoId) {
+            if (topoId != null) {
+                pre.putInt(topoId);
+                prefixLength = 5;
+            }
+            return this;
+        }
+
+        public HBaseStoreScan withTimeRange(Set<TimeRange> timeRangeSet) {
+
+            Long minTime = null;
+
+            if (timeRangeSet != null) {
+                for (TimeRange tr : timeRangeSet) {
+                    if (minTime == null || tr.startTime < minTime) {
+                        minTime = tr.startTime;
+                    }
+                }
+            }
+
+            if (minTime != null) {
+                pre.putLong(minTime);
+                prefixLength = 13;
+            }
+
+            return this;
+        }
+
+        public HBaseStoreScan withMetricSet(HashSet<Integer> metricIds) {
+            if (metricIds != null) {
+                this.metricIds = metricIds;
+                prefixLength = 17;
+            }
+            return this;
+        }
+
+        public HBaseStoreScan withCompId(Integer compId) {
+            if (compId != null) {
+                post.putInt(compId);
+                prefixLength = 21;
+            }
+            return this;
+        }
+
+        public HBaseStoreScan withExecutorId(Integer executorId) {
+            if (executorId != null) {
+                post.putInt(executorId);
+                prefixLength = 25;
+            }
+            return this;
+        }
+
+        public HBaseStoreScan withHostId(Integer hostId) {
+            if (hostId != null) {
+                post.putInt(hostId);
+                prefixLength = 29;
+            }
+            return this;
+        }
+
+        public HBaseStoreScan withPort(Long port) {
+            if (port != null) {
+                post.putLong(port);
+                prefixLength = 37;
+            }
+            return this;
+        }
+
+        public HBaseStoreScan withStreamId(Integer streamId) {
+            if (streamId != null) {
+                post.putInt(streamId);
+                prefixLength = 41;
+            }
+            return this;
+        }
+
+        public List<Scan> getScanList() {
+            if (scanList == null)
+                generateScanList();
+            return scanList;
+        }
+
+        private void generateScanList() {
+
+            scanList = new ArrayList<Scan>();
+
+            // create buffer without metricId
+            byte[] prefixArray = new byte[prefixLength];
+            int byteBufferLength;
+            if (prefixLength > PRE_START_OFFSET) {
+                byteBufferLength = pre.position();
+                pre.position(0);
+                pre.get(prefixArray, PRE_START_OFFSET, byteBufferLength);
+            }
+            if (prefixLength > POST_START_OFFSET) {
+                byteBufferLength = post.position();
+                post.position(0);
+                post.get(prefixArray, POST_START_OFFSET, byteBufferLength);
+            }
+
+            byte[] metricBytes;
+            if (metricIds != null) {
+                for (Integer metricId : metricIds) {
+                    metricBytes = Bytes.toBytes(metricId);
+                    System.arraycopy(metricBytes, 0, prefixArray, METRIC_OFFSET, METRIC_LENGTH);
+                    createNewScan(prefixArray);
+                }
+            } else {
+                createNewScan(prefixArray);
+            }
+
+        }
+
+        private void createNewScan(byte[] prefix) {
+            Scan s = new Scan();
+            s.setRowPrefixFilter(prefix);
+            scanList.add(s);
+        }
+
     }
 
 }
