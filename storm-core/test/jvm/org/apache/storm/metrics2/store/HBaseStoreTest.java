@@ -19,10 +19,14 @@ package org.apache.storm.metrics2.store;
 
 
 import clojure.lang.Obj;
+import org.apache.storm.generated.Window;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import static java.util.Collections.max;
+import static java.util.Collections.min;
 import static org.junit.Assert.*;
 
 
@@ -51,6 +55,9 @@ public class HBaseStoreTest {
     private final static String ZOOKEEPER_ROOT = "/storm";
     private final static List<String> ZOOKEEPER_SERVERS = Arrays.asList("localhost");
     private final static int ZOOKEEPER_PORT = 2181;
+
+    private HBaseStore store;
+    private Map conf;
 
 
     private Map makeConfig() {
@@ -109,13 +116,13 @@ public class HBaseStoreTest {
 
     private Metric makeMetric(long ts) {
 
-        Metric m = new Metric("testMetric" + ts, ts,
-                "testExecutor" + ts,
-                "testComp" + ts,
+        Metric m = new Metric("testMetric", ts,
+                "testExecutor",
+                "testComp",
                 "testStream" + ts,
-                "testTopo" + ts,
+                "testTopo",
                 123.45);
-        m.setHost("testHost" + ts);
+        m.setHost("testHost");
         return m;
     }
 
@@ -137,10 +144,22 @@ public class HBaseStoreTest {
         return m;
     }
 
-    @Test
-    public void testPrepare() {
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
+    private void assertMetricEqual(Metric expected, Metric actual) {
+
+        // TODO: add all
+        assertEquals(expected.getAggLevel(), actual.getAggLevel());
+        assertEquals(expected.getTopoIdStr(), actual.getTopoIdStr());
+        assertEquals(expected.getTimeStamp(), actual.getTimeStamp());
+
+        if (expected.getAggLevel() == 0) {
+            // clear sum/min/max
+        }
+    }
+
+    @Before
+    public void setUp() {
+        this.store = new HBaseStore();
+        this.conf = makeConfig();
         try {
             store.prepare(conf);
         } catch (Exception e) {
@@ -149,10 +168,13 @@ public class HBaseStoreTest {
     }
 
     @Test
-    public void testPrepareInvalidConf() {
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
+    public void testPrepare() {
+        // redundant
+    }
 
+    @Test
+    public void testPrepareInvalidConf() {
+        this.store = new HBaseStore();
         // call prepare() with one config entry missing each iteration
         for (Object key : conf.keySet()) {
             TreeMap<String, Object> testMap = new TreeMap<String, Object>(conf);
@@ -171,20 +193,11 @@ public class HBaseStoreTest {
 
     @Test
     public void testInsert() {
-
         Logger log = Mockito.mock(Logger.class);
 
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
         Metric m = makeMetric(1234567);
-
-        try {
-            store.prepare(conf);
-        } catch (MetricException e) {
-            fail("Unexpected Exception" + e);
-        }
-
         store.insert(m);
+
         Mockito.verifyZeroInteractions(log);
     }
 
@@ -193,19 +206,98 @@ public class HBaseStoreTest {
 
         Logger log = Mockito.mock(Logger.class);
 
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
         Metric m = makeAggMetric(1234567);
-
-        try {
-            store.prepare(conf);
-        } catch (MetricException e) {
-            fail("Unexpected Exception" + e);
-        }
-
         store.insert(m);
+
         Mockito.verifyZeroInteractions(log);
     }
 
+    @Test
+    public void testScan() {
+
+        Metric m = makeMetric(9876);
+        store.insert(m);
+
+        Integer aggLevel = m.getAggLevel().intValue();
+        String topoIdStr = m.getTopoIdStr();
+
+        HashMap<String, Object> settings = new HashMap<>();
+        settings.put(StringKeywords.aggLevel, aggLevel);
+        settings.put(StringKeywords.topoId, topoIdStr);
+
+        store.scan(settings, (metric, timeRanges) -> {
+            assertMetricEqual(m, metric);
+        });
+
+    }
+
+    @Test
+    public void testPopulateValue() {
+
+        Metric m = makeMetric(23894);
+        store.insert(m);
+
+        Metric newMetric = makeMetric(23894);
+        newMetric.setValue(0.00);
+        newMetric.setCount(0L);
+
+        store.populateValue(newMetric);
+        assertNotEquals(0L, newMetric.getCount());
+        assertNotEquals(0.00, newMetric.getValue(), 0.00001);
+        assertNotEquals(0.00, newMetric.getSum(), 0.00001);
+        assertNotEquals(0.00, newMetric.getMin(), 0.00001);
+        assertNotEquals(0.00, newMetric.getMax(), 0.00001);
+
+        newMetric.setTopoIdStr("BAD TOPOLOGY");
+        newMetric.setValue(0.00);
+        newMetric.setCount(0L);
+        store.populateValue(newMetric);
+        assertEquals(0L, newMetric.getCount());
+        assertEquals(0.00, newMetric.getValue(), 0.00001);
+        assertEquals(0.00, newMetric.getSum(), 0.00001);
+        assertEquals(0.00, newMetric.getMin(), 0.00001);
+        assertEquals(0.00, newMetric.getMax(), 0.00001);
+
+    }
+
+    @Test
+    public void testRemove(){
+
+        for (int i = 1; i <= 10; ++i){
+            Metric m = makeMetric(i);
+            store.insert(m);
+        }
+
+        HashMap<String, Object> settings = new HashMap<>();
+        HashSet<TimeRange> timeRangeSet = new HashSet<>();
+        timeRangeSet.add(new TimeRange(1L, 10L + 1L, Window.ALL));
+
+        settings.put(StringKeywords.aggLevel, 0);
+        settings.put(StringKeywords.topoId, "testTopo");
+        settings.put(StringKeywords.timeRangeSet, timeRangeSet);
+
+        // scan for inserted metrics, should have all 10
+        HashSet<Metric> retrievedMetrics = new HashSet<>();
+
+        store.scan(settings, (metric, timeRanges) -> {
+            retrievedMetrics.add(metric);
+        });
+
+        assertEquals(10, retrievedMetrics.size());
+
+
+        retrievedMetrics.clear();
+
+        // remove metrics
+        store.remove(settings);
+
+        // scan again, should have nil
+        store.scan(settings, (metric, timeRanges) -> {
+            retrievedMetrics.add(metric);
+        });
+
+        assertEquals(0, retrievedMetrics.size());
+
+    }
 
 }

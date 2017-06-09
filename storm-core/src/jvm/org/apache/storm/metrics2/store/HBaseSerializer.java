@@ -139,8 +139,10 @@ public class HBaseSerializer {
 
     private void initializeMap(MetaDataIndex index) {
         int i = index.ordinal();
-        metaData[i].map = new HashMap<String, Integer>();
-        metaData[i].rmap = new HashMap<Integer, String>();
+        if (metaData[i].map == null)
+            metaData[i].map = new HashMap<String, Integer>();
+        if (metaData[i].rmap == null)
+            metaData[i].rmap = new HashMap<Integer, String>();
 
         Scan s = new Scan();
         byte[] columnFamily = _schema.metadataTableInfos[i].getColumnFamily();
@@ -167,6 +169,32 @@ public class HBaseSerializer {
         } catch (IOException e) {
             LOG.error("Could not scan table", e);
         }
+    }
+
+    private Integer checkExistingMapping(String keyStr, MetaDataIndex metaIndex) {
+
+        int i = metaIndex.ordinal();
+        MetaData meta = metaData[i];
+        HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
+
+        byte[] key = Bytes.toBytes(keyStr);
+        byte[] columnFamily = info.getColumnFamily();
+        byte[] column = info.getColumn();
+
+        Get g = new Get(key);
+        g.addColumn(columnFamily, column);
+
+        try {
+            Result result = meta.table.get(g);
+            if (!result.isEmpty()) {
+                byte[] columnValue = result.getValue(columnFamily, column);
+                return Bytes.toInt(columnValue);
+            }
+        } catch (IOException e) {
+            LOG.error("Could not get ref ", e);
+        }
+
+        return null;
     }
 
     private Integer insertNewMapping(String keyStr, MetaDataIndex metaIndex) {
@@ -225,14 +253,15 @@ public class HBaseSerializer {
 
         int i = metaIndex.ordinal();
         MetaData meta = metaData[i];
-        Integer ref;
 
-        if (!meta.map.containsKey(key) && key != null) {
-            ref = insertNewMapping(key, metaIndex);
+        Integer ref = meta.map.get(key);
+
+        if (ref == null && key != null) {
+            ref = checkExistingMapping(key, metaIndex);
+            if (ref == null)
+                ref = insertNewMapping(key, metaIndex);
             meta.map.put(key, ref);
             meta.rmap.put(ref, key);
-        } else {
-            ref = meta.map.get(key);
         }
 
         return ref;
@@ -256,22 +285,24 @@ public class HBaseSerializer {
         HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
 
         boolean isAggregate = m.getCount() > 1;
+
+        long timestamp = m.getTimeStamp();
         byte[] key = createKey(m);
         byte[] value = Bytes.toBytes(m.getValue());
+        byte[] count = Bytes.toBytes(m.getCount());
         byte[] columnFamily = info.getColumnFamily();
 
-        Put p = new Put(key);
+        Put p = new Put(key, timestamp);
 
         p.addColumn(columnFamily, info.getValueColumn(), value);
+        p.addColumn(columnFamily, info.getCountColumn(), count);
 
         if (isAggregate) {
             byte[] sum = Bytes.toBytes(m.getSum());
-            byte[] count = Bytes.toBytes(m.getCount());
             byte[] min = Bytes.toBytes(m.getMin());
             byte[] max = Bytes.toBytes(m.getMax());
 
             p.addColumn(columnFamily, info.getSumColumn(), sum);
-            p.addColumn(columnFamily, info.getCountColumn(), count);
             p.addColumn(columnFamily, info.getMinColumn(), min);
             p.addColumn(columnFamily, info.getMaxColumn(), max);
         }
@@ -287,12 +318,11 @@ public class HBaseSerializer {
         Integer metricNameId = getRef(METRICNAME, m.getMetricName());
         Integer executorId = getRef(EXECUTOR, m.getExecutor());
 
-        ByteBuffer bb = ByteBuffer.allocate(41);
+        ByteBuffer bb = ByteBuffer.allocate(33);
 
         try {
             bb.put(m.getAggLevel());
             bb.putInt(topoId);
-            bb.putLong(m.getTimeStamp());
             bb.putInt(metricNameId);
             bb.putInt(compId);
             bb.putInt(executorId);
@@ -315,24 +345,25 @@ public class HBaseSerializer {
     public boolean populateMetricKey(Metric m, Result result) {
 
         byte[] key = result.getRow();
-        ByteBuffer bb = ByteBuffer.allocate(41);
-        bb.put(key);
+        long timeStamp = result.rawCells()[0].getTimestamp();
+
+        ByteBuffer bb = ByteBuffer.allocate(33).put(key);
+        bb.rewind();
 
         Byte aggLevel = bb.get();
         Integer topoId = bb.getInt();
-        long timeStamp = bb.getLong();
-        Integer streamId = bb.getInt();
-        Integer hostId = bb.getInt();
-        Integer compId = bb.getInt();
         Integer metricNameId = bb.getInt();
-        long port = bb.getLong();
+        Integer compId = bb.getInt();
         Integer executorId = bb.getInt();
+        Integer hostId = bb.getInt();
+        long port = bb.getLong();
+        Integer streamId = bb.getInt();
 
         String topoIdStr = getReverseRef(TOPOLOGY, topoId);
+        String metricNameStr = getReverseRef(METRICNAME, metricNameId);
         String compIdStr = getReverseRef(COMP, compId);
         String execIdStr = getReverseRef(EXECUTOR, executorId);
         String hostIdStr = getReverseRef(HOST, hostId);
-        String metricNameStr = getReverseRef(METRICNAME, metricNameId);
         String streamIdStr = getReverseRef(STREAM, streamId);
 
         m.setAggLevel(aggLevel);
@@ -349,7 +380,7 @@ public class HBaseSerializer {
     }
 
     public boolean populateMetricValue(Metric m, Result result) {
-        // TODO: avoid uncecessary lookup
+        // TODO: avoid unnecessary lookups
 
         HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
         byte[] cf = info.getColumnFamily();
@@ -364,6 +395,8 @@ public class HBaseSerializer {
             double value = Bytes.toDouble(valueBytes);
             long count = Bytes.toLong(countBytes);
 
+            m.setValue(value);
+            m.setCount(count);
             if (count > 1) {
                 double sum = Bytes.toDouble(sumBytes);
                 double min = Bytes.toDouble(minBytes);
@@ -374,20 +407,12 @@ public class HBaseSerializer {
                 m.setMax(max);
             }
 
-            m.setValue(value);
-            m.setCount(count);
-
             return true;
         } catch (NullPointerException e) {
-            m.setCount(0L);
             m.setValue(0.00);
-            m.setSum(0.00);
-            m.setMin(0.00);
-            m.setMax(0.00);
+            m.setCount(0L);
             return false;
         }
-
-
     }
 
     public List<Scan> createScanOperation(HashMap<String, Object> settings) {
@@ -410,10 +435,20 @@ public class HBaseSerializer {
         Integer hostId = getRef(HOST, hostIdStr);
         Integer streamId = getRef(STREAM, streamIdStr);
         Long port = (portStr == null) ? null : Long.parseLong(portStr);
-        HashSet<Integer> metricIds = new HashSet<>(metricStrSet.size());
-        metricStrSet.forEach(metrcIdStr -> {
-            metricIds.add(getRef(METRICNAME, metrcIdStr));
-        });
+
+        HashSet<Integer> metricIds = null;
+
+        if (metricStrSet != null) {
+            metricIds = new HashSet<>(metricStrSet.size());
+            for (String s : metricStrSet) {
+                Integer ref = getRef(METRICNAME, s);
+                if (ref != null)
+                    metricIds.add(ref);
+                else
+                    LOG.error("Could not lookup {} reference", s);
+            }
+            LOG.info("{}-{}", metricStrSet, metricIds);
+        }
 
         HBaseStoreScan scan = new HBaseStoreScan()
                 .withAggLevel(aggLevel)
@@ -426,7 +461,11 @@ public class HBaseSerializer {
                 .withPort(port)
                 .withStreamId(streamId);
 
-        return scan.getScanList();
+        // clone list
+        List<Scan> list = scan.getScanList();
+        List<Scan> temp = new ArrayList<>(list.size());
+        temp.addAll(list);
+        return temp;
     }
 
     private int getPrefixLength(HashMap<String, Object> settings) {
@@ -437,28 +476,25 @@ public class HBaseSerializer {
         if (!settings.containsKey(StringKeywords.topoId))
             return 1;
 
-        if (!settings.containsKey(StringKeywords.timeRangeSet))
+        if (!settings.containsKey(StringKeywords.metricSet))
             return 5;
 
-        if (!settings.containsKey(StringKeywords.metricSet))
-            return 13;
-
         if (!settings.containsKey(StringKeywords.component))
-            return 17;
+            return 9;
 
         if (!settings.containsKey(StringKeywords.executor))
-            return 21;
+            return 13;
 
         if (!settings.containsKey(StringKeywords.host))
-            return 25;
+            return 17;
 
         if (!settings.containsKey(StringKeywords.port))
-            return 29;
+            return 21;
 
         if (!settings.containsKey(StringKeywords.stream))
-            return 37;
+            return 25;
 
-        return 41;
+        return 33;
     }
 
     public Metric deserializeMetric(Result result) {
@@ -471,10 +507,10 @@ public class HBaseSerializer {
     private class HBaseStoreScan {
 
         private final static int PRE_START_OFFSET = 0;
-        private final static int PRE_LENGTH = 13;
-        private final static int POST_START_OFFSET = 17;
+        private final static int PRE_LENGTH = 5;
+        private final static int POST_START_OFFSET = 9;
         private final static int POST_LENGTH = 24;
-        private final static int METRIC_OFFSET = 13;
+        private final static int METRIC_OFFSET = PRE_LENGTH;
         private final static int METRIC_LENGTH = 4;
 
 
@@ -483,6 +519,7 @@ public class HBaseSerializer {
         private ByteBuffer post;
         private int prefixLength;
         private HashSet<Integer> metricIds;
+        private Set<TimeRange> timeRangeSet;
 
         public HBaseStoreScan() {
             pre = ByteBuffer.allocate(PRE_LENGTH);
@@ -507,29 +544,16 @@ public class HBaseSerializer {
         }
 
         public HBaseStoreScan withTimeRange(Set<TimeRange> timeRangeSet) {
-
-            Long minTime = null;
-
             if (timeRangeSet != null) {
-                for (TimeRange tr : timeRangeSet) {
-                    if (minTime == null || tr.startTime < minTime) {
-                        minTime = tr.startTime;
-                    }
-                }
+                this.timeRangeSet = timeRangeSet;
             }
-
-            if (minTime != null) {
-                pre.putLong(minTime);
-                prefixLength = 13;
-            }
-
             return this;
         }
 
         public HBaseStoreScan withMetricSet(HashSet<Integer> metricIds) {
-            if (metricIds != null) {
+            if (metricIds != null && !metricIds.isEmpty()) {
                 this.metricIds = metricIds;
-                prefixLength = 17;
+                prefixLength = 9;
             }
             return this;
         }
@@ -537,7 +561,7 @@ public class HBaseSerializer {
         public HBaseStoreScan withCompId(Integer compId) {
             if (compId != null) {
                 post.putInt(compId);
-                prefixLength = 21;
+                prefixLength = 13;
             }
             return this;
         }
@@ -545,7 +569,7 @@ public class HBaseSerializer {
         public HBaseStoreScan withExecutorId(Integer executorId) {
             if (executorId != null) {
                 post.putInt(executorId);
-                prefixLength = 25;
+                prefixLength = 17;
             }
             return this;
         }
@@ -553,7 +577,7 @@ public class HBaseSerializer {
         public HBaseStoreScan withHostId(Integer hostId) {
             if (hostId != null) {
                 post.putInt(hostId);
-                prefixLength = 29;
+                prefixLength = 21;
             }
             return this;
         }
@@ -561,7 +585,7 @@ public class HBaseSerializer {
         public HBaseStoreScan withPort(Long port) {
             if (port != null) {
                 post.putLong(port);
-                prefixLength = 37;
+                prefixLength = 29;
             }
             return this;
         }
@@ -569,7 +593,7 @@ public class HBaseSerializer {
         public HBaseStoreScan withStreamId(Integer streamId) {
             if (streamId != null) {
                 post.putInt(streamId);
-                prefixLength = 41;
+                prefixLength = 33;
             }
             return this;
         }
@@ -603,18 +627,48 @@ public class HBaseSerializer {
                 for (Integer metricId : metricIds) {
                     metricBytes = Bytes.toBytes(metricId);
                     System.arraycopy(metricBytes, 0, prefixArray, METRIC_OFFSET, METRIC_LENGTH);
-                    createNewScan(prefixArray);
+                    createNewScans(prefixArray.clone());
                 }
             } else {
-                createNewScan(prefixArray);
+                createNewScans(prefixArray.clone());
             }
 
         }
 
-        private void createNewScan(byte[] prefix) {
+        private void createNewScans(byte[] prefix) {
+
             Scan s = new Scan();
             s.setRowPrefixFilter(prefix);
-            scanList.add(s);
+
+            if (timeRangeSet != null) {
+
+                long start, end;
+                for (TimeRange timeRange : timeRangeSet) {
+                    start = timeRange.startTime != null ? timeRange.startTime : Long.MIN_VALUE;
+                    end = timeRange.endTime != null ? timeRange.endTime : Long.MAX_VALUE - 1;
+
+                    if (end < start) {
+                        start ^= end;
+                        end ^= start;
+                        start ^= end;
+                    }
+
+
+                    try {
+                        s.setTimeRange(start, end);
+                        LOG.info("Creating scan with prefix {} between {} - {}", Bytes.toStringBinary(prefix), start, end);
+                        scanList.add(new Scan(s));
+                    } catch (IOException e) {
+                        LOG.error("Could not create scan min = {} max = {}", start, end, e);
+                    }
+                }
+
+            } else {
+                LOG.info("Creating scan with prefix {}", Bytes.toStringBinary(prefix));
+                scanList.add(s);
+            }
+
+
         }
 
     }

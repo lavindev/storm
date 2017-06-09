@@ -18,6 +18,7 @@
 package org.apache.storm.metrics2.store;
 
 
+import org.apache.storm.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,7 +171,6 @@ public class HBaseStore implements MetricStore {
         scanList.forEach(s -> {
 
             int numRecordsScanned = 0;
-            int numRecordsMatched = 0;
             ResultScanner scanner = null;
             try {
                 scanner = _metricsTable.getScanner(s);
@@ -183,12 +183,10 @@ public class HBaseStore implements MetricStore {
                 ++numRecordsScanned;
                 Metric metric = _serializer.deserializeMetric(result);
                 Set<TimeRange> timeRanges = getTimeRanges(metric, settings);
-                if (checkMetric(metric, settings)) {
-                    ++numRecordsMatched;
-                    agg.agg(metric, timeRanges);
-                }
+
+                agg.agg(metric, timeRanges);
             }
-            LOG.info("Scanned {} records, matched {} records", numRecordsScanned, numRecordsMatched);
+            LOG.info("Scanned {} records", numRecordsScanned);
             scanner.close();
         });
     }
@@ -197,56 +195,19 @@ public class HBaseStore implements MetricStore {
 
         Set<TimeRange> timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
 
-        if (timeRangeSet != null) {
-            Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
-
-            timeRangeSet.forEach(timeRange -> {
-                Long metricTimeStamp = m.getTimeStamp();
-                if (timeRange.contains(metricTimeStamp))
-                    matchedTimeRanges.add(timeRange);
-            });
-
-            if (matchedTimeRanges.isEmpty()) {
-                LOG.info("DOES NOT MATCH time ranges");
-            }
-
-            return matchedTimeRanges.isEmpty() ? null : matchedTimeRanges;
+        if (timeRangeSet == null) {
+            return null;
         }
 
-        return null;
-    }
+        Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
 
-    private boolean checkMetric(Metric m, HashMap<String, Object> settings) {
-
-        // TODO: absolute mess, fix this
-        LOG.info("Checking {}", m);
-
-        if (settings.containsKey(StringKeywords.aggLevel) &&
-                (m.getAggLevel() == null ||
-                        !m.getAggLevel().equals(((Integer) settings.get(StringKeywords.aggLevel)).byteValue()))) {
-
-            LOG.info("DOES NOT MATCH agg level: {} {}", m.getAggLevel(), ((Integer) settings.get(StringKeywords.aggLevel)).byteValue());
-            return false;
-
-        } else if (settings.containsKey(StringKeywords.topoId) &&
-                !m.getTopoIdStr().equals(settings.get(StringKeywords.topoId))) {
-
-            LOG.info("DOES NOT MATCH topo {} {}", m.getTopoIdStr(), settings.get(StringKeywords.topoId));
-            return false;
-
-        } else if (settings.containsKey(StringKeywords.component) &&
-                !m.getCompName().equals(settings.get(StringKeywords.component))) {
-
-            LOG.info("Not the right component {}", m.getCompName());
-            return false;
-
-        } else if (settings.containsKey(StringKeywords.metricSet) &&
-                !((HashSet<String>) settings.get(StringKeywords.metricSet)).contains(m.getMetricName())) {
-
-            LOG.info("Not the right metric name {}", m.getMetricName());
-            return false;
+        for (TimeRange timeRange : timeRangeSet) {
+            Long metricTimeStamp = m.getTimeStamp();
+            if (timeRange.contains(metricTimeStamp))
+                matchedTimeRanges.add(timeRange);
         }
-        return true;
+
+        return matchedTimeRanges;
     }
 
 
