@@ -95,6 +95,18 @@ public class HBaseStore implements MetricStore {
             throw new MetricException("Could not connect to hbase " + e);
         }
 
+        // Benchmark stuff
+        List<String> metricNames = Arrays.asList("emitted", "transferred", "latency-complete", "latency-execute",
+                "latency-process", "acked", "failed");
+        ArrayList<HBaseBench> benchmarks = new ArrayList<>();
+
+        for (int i = 1; i <= 5; ++i) {
+            HBaseBench b = new HBaseBench(this, i).withMetricNames(metricNames);
+            benchmarks.add(b);
+        }
+
+        benchmarks.parallelStream().forEach(HBaseBench::run);
+
     }
 
     private void validateConfig(Map config) throws MetricException {
