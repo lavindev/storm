@@ -55,6 +55,7 @@ public class HBaseStoreTest {
     private final static String ZOOKEEPER_ROOT = "/storm";
     private final static List<String> ZOOKEEPER_SERVERS = Arrays.asList("localhost");
     private final static int ZOOKEEPER_PORT = 2181;
+    private final static int ZOOKEEPER_SESSION_TIMEOUT = 20000;
 
     private HBaseStore store;
     private Map conf;
@@ -71,6 +72,7 @@ public class HBaseStoreTest {
         confMap.put("storm.zookeeper.servers", ZOOKEEPER_SERVERS);
         confMap.put("storm.zookeeper.port", ZOOKEEPER_PORT);
         confMap.put("storm.zookeeper.root", ZOOKEEPER_ROOT);
+        confMap.put("storm.zookeeper.session.timeout", ZOOKEEPER_SESSION_TIMEOUT);
 
         // metadata map
         HashMap<String, Object> metaDataMap = new HashMap<String, Object>();

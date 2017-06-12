@@ -18,6 +18,7 @@
 package org.apache.storm.metrics2.store;
 
 
+import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
 import org.apache.storm.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,22 +37,28 @@ public class HBaseStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseStore.class);
 
     private final static String BASE_CONFIG_KEY = "storm.metrics2.store.HBaseStore";
-    private final static String RETENTION_KEY = BASE_CONFIG_KEY + ".retention";
-    private final static String RETENTION_UNIT_KEY = BASE_CONFIG_KEY + ".retention.units";
-    private final static String HBASE_ROOT_DIR_KEY = BASE_CONFIG_KEY + ".hbase.root_dir";
-    private final static String ZOOKEEPER_SERVERS_KEY = "storm.zookeeper.servers";
-    private final static String ZOOKEEPER_PORT_KEY = "storm.zookeeper.port";
-    private final static String ZOOKEEPER_ROOT_KEY = "storm.zookeeper.root";
-    private final static String HBASE_META_TABLE_KEY = BASE_CONFIG_KEY + ".hbase.metrics_table";
-    private final static String HBASE_META_CF_KEY = BASE_CONFIG_KEY + ".hbase.meta_cf";
-    private final static String HBASE_META_COL_KEY = BASE_CONFIG_KEY + ".hbase.meta_column";
-    private final static String HBASE_METRICS_TABLE_KEY = BASE_CONFIG_KEY + ".hbase.metrics_table";
-    private final static String HBASE_METRICS_CF_KEY = BASE_CONFIG_KEY + ".hbase.metrics_cf";
-    private final static String HBASE_METRICS_VALUE_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_value_column";
-    private final static String HBASE_METRICS_COUNT_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_count_column";
-    private final static String HBASE_METRICS_SUM_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_sum_column";
-    private final static String HBASE_METRICS_MIN_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_min_column";
-    private final static String HBASE_METRICS_MAX_COL_KEY = BASE_CONFIG_KEY + ".hbase.metrics_max_column";
+    private final static String HBASE_ZK_KEY = BASE_CONFIG_KEY + ".zookeeper";
+    private final static String STORM_ZK_KEY = "storm.zookeeper";
+
+    private final static String ZOOKEEPER_SERVERS = ".servers";
+    private final static String ZOOKEEPER_PORT = ".port";
+    private final static String ZOOKEEPER_ROOT = ".root";
+    private final static String ZOOKEEPER_SESSION_TIMEOUT = ".session.timeout";
+
+    private final static String RETENTION = BASE_CONFIG_KEY + ".retention";
+    private final static String RETENTION_UNIT = BASE_CONFIG_KEY + ".retention.units";
+
+    private final static String HBASE_ROOT_DIR = BASE_CONFIG_KEY + ".hbase.root_dir";
+    private final static String HBASE_META_TABLE = BASE_CONFIG_KEY + ".hbase.metrics_table";
+    private final static String HBASE_META_CF = BASE_CONFIG_KEY + ".hbase.meta_cf";
+    private final static String HBASE_META_COL = BASE_CONFIG_KEY + ".hbase.meta_column";
+    private final static String HBASE_METRICS_TABLE = BASE_CONFIG_KEY + ".hbase.metrics_table";
+    private final static String HBASE_METRICS_CF = BASE_CONFIG_KEY + ".hbase.metrics_cf";
+    private final static String HBASE_METRICS_VALUE_COL = BASE_CONFIG_KEY + ".hbase.metrics_value_column";
+    private final static String HBASE_METRICS_COUNT_COL = BASE_CONFIG_KEY + ".hbase.metrics_count_column";
+    private final static String HBASE_METRICS_SUM_COL = BASE_CONFIG_KEY + ".hbase.metrics_sum_column";
+    private final static String HBASE_METRICS_MIN_COL = BASE_CONFIG_KEY + ".hbase.metrics_min_column";
+    private final static String HBASE_METRICS_MAX_COL = BASE_CONFIG_KEY + ".hbase.metrics_max_column";
 
     private Connection _hbaseConnection;
     private HBaseSchema _schema;
@@ -93,20 +100,11 @@ public class HBaseStore implements MetricStore {
     private void validateConfig(Map config) throws MetricException {
         // TODO: add rest of validation
 
-        if (!(config.containsKey(HBASE_ROOT_DIR_KEY))) {
+        if (!(config.containsKey(HBASE_ROOT_DIR))) {
             throw new MetricException("Need HBase root dir");
         }
-        if (!(config.containsKey(RETENTION_KEY) && config.containsKey(RETENTION_UNIT_KEY))) {
+        if (!(config.containsKey(RETENTION) && config.containsKey(RETENTION_UNIT))) {
             throw new MetricException("Need retention value/units");
-        }
-        if (!(config.containsKey(ZOOKEEPER_ROOT_KEY))) {
-            throw new MetricException("Need ZooKeeper Root/Data directory");
-        }
-        if (!(config.containsKey(ZOOKEEPER_SERVERS_KEY))) {
-            throw new MetricException("Need ZooKeeper servers list");
-        }
-        if (!(config.containsKey(ZOOKEEPER_PORT_KEY))) {
-            throw new MetricException("Need ZooKeeper port");
         }
     }
 
@@ -114,15 +112,24 @@ public class HBaseStore implements MetricStore {
         // TODO: read from config, fix cast?
         Configuration conf = HBaseConfiguration.create();
 
-        String hbaseRootDir = (String) config.get(HBASE_ROOT_DIR_KEY);
-        String zookeeperQuorum = String.join(";", (List) config.get(ZOOKEEPER_SERVERS_KEY));
-        String zookeeperRoot = (String) config.get(ZOOKEEPER_ROOT_KEY);
-        int zookeeperPort = (int) config.get(ZOOKEEPER_PORT_KEY);
+        Object zookeeperServers = config.get(HBASE_ZK_KEY + ZOOKEEPER_SERVERS);
+        String zkPrefix = (zookeeperServers == null) ? STORM_ZK_KEY : HBASE_ZK_KEY;
 
-        conf.set(HConstants.HBASE_DIR, hbaseRootDir);
+        String hbaseRootDir = (String) config.get(HBASE_ROOT_DIR);
+        String zookeeperQuorum = String.join(";", (List) config.get(zkPrefix + ZOOKEEPER_SERVERS));
+        String zookeeperRoot = (String) config.get(zkPrefix + ZOOKEEPER_ROOT);
+        int zookeeperPort = (int) config.get(zkPrefix + ZOOKEEPER_PORT);
+        int zookeeperSessionTimeout = (int) config.get(zkPrefix + ZOOKEEPER_SESSION_TIMEOUT);
+        // TODO : username/password - null
+
         conf.set(HConstants.ZOOKEEPER_QUORUM, zookeeperQuorum);
         conf.set(HConstants.ZOOKEEPER_DATA_DIR, zookeeperRoot);
         conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zookeeperPort);
+        conf.setInt(HConstants.ZK_SESSION_TIMEOUT, zookeeperSessionTimeout);
+
+        // security
+        //conf.set("hbase.security.authentication", "kerberos");
+        //conf.set("hbase.rpc.protection", "privacy");
 
         return conf;
     }
@@ -258,6 +265,5 @@ public class HBaseStore implements MetricStore {
         }
 
     }
-
 
 }

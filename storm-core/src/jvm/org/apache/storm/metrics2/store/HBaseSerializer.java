@@ -22,10 +22,12 @@ import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.client.coprocessor.AggregationClient;
+import org.apache.hadoop.hbase.security.visibility.CellVisibility;
 import org.apache.hadoop.hbase.util.ByteBufferArray;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hdfs.util.ByteArray;
+import org.apache.storm.generated.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -461,11 +463,7 @@ public class HBaseSerializer {
                 .withPort(port)
                 .withStreamId(streamId);
 
-        // clone list
-        List<Scan> list = scan.getScanList();
-        List<Scan> temp = new ArrayList<>(list.size());
-        temp.addAll(list);
-        return temp;
+        return scan.getScanList();
     }
 
     private int getPrefixLength(HashMap<String, Object> settings) {
@@ -546,6 +544,15 @@ public class HBaseSerializer {
         public HBaseStoreScan withTimeRange(Set<TimeRange> timeRangeSet) {
             if (timeRangeSet != null) {
                 this.timeRangeSet = timeRangeSet;
+
+                // debug
+                for (TimeRange timeRange : timeRangeSet) {
+                    String windowStr = timeRange.window == Window.ONE_DAY ? "ONE_DAY" :
+                            timeRange.window == Window.TEN_MIN ? "TEN_MIN" :
+                                    timeRange.window == Window.THREE_HR ? "THREE_HR" : "ALL";
+                    LOG.info("Window = {}, start = {}, end = {}", windowStr, timeRange.startTime, timeRange.endTime);
+                }
+
             }
             return this;
         }
@@ -652,7 +659,6 @@ public class HBaseSerializer {
                         end ^= start;
                         start ^= end;
                     }
-
 
                     try {
                         s.setTimeRange(start, end);
