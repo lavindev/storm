@@ -37,16 +37,18 @@ public class HBaseBench {
 
     private HashMap<Integer, ArrayList<Integer>> writeTimer;
     private HashMap<Integer, ArrayList<Integer>> scanTimer;
+    private HashMap<Integer, ArrayList<Integer>> aggWriteTimer;
 
     public HBaseBench(HBaseStore store, long idPrefix) {
-        this.scanCount = 50;
-        this.writeCount = 1000;
-        this.rounds = 10;
+        this.scanCount = 25;
+        this.writeCount = 500;
+        this.rounds = 3;
         this.metricNames = Arrays.asList("testMetric1", "testMetric2", "testMetric3");
         this.idPrefix = idPrefix;
         this.random = new Random();
         this.store = store;
         this.writeTimer = new HashMap<Integer, ArrayList<Integer>>(rounds);
+        this.aggWriteTimer = new HashMap<Integer, ArrayList<Integer>>(rounds);
         this.scanTimer = new HashMap<Integer, ArrayList<Integer>>(rounds);
     }
 
@@ -56,7 +58,7 @@ public class HBaseBench {
     }
 
     private long timeNow() {
-        return System.nanoTime();
+        return System.currentTimeMillis();
     }
 
     private Metric makeMetric(String metricName) {
@@ -87,6 +89,7 @@ public class HBaseBench {
 
         for (int i = 0; i < rounds; ++i) {
             writeTimer.put(i, new ArrayList<Integer>(writeCount));
+            aggWriteTimer.put(i, new ArrayList<Integer>(writeCount));
             scanTimer.put(i, new ArrayList<Integer>(scanCount));
             insert(i);
             scan(i);
@@ -103,12 +106,24 @@ public class HBaseBench {
         for (int i = 0; i <= writeCount; ++i) {
             long startTime = timeNow();
             for (String metricName : metricNames) {
-                Metric m = (i % 2 == 0) ? makeMetric(metricName) : makeAggMetric(metricName);
+                Metric m = makeMetric(metricName);
                 store.insert(m);
             }
             long endTime = timeNow();
             int duration = (int) (endTime - startTime);
             writeTimer.get(round).add(duration);
+        }
+
+
+        for (int i = 0; i <= writeCount; ++i) {
+            long startTime = timeNow();
+            for (String metricName : metricNames) {
+                Metric m = makeAggMetric(metricName);
+                store.insert(m);
+            }
+            long endTime = timeNow();
+            int duration = (int) (endTime - startTime);
+            aggWriteTimer.get(round).add(duration);
         }
     }
 
