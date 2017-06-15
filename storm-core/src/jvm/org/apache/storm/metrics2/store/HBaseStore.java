@@ -61,7 +61,6 @@ public class HBaseStore implements MetricStore {
     private final static String HBASE_METRICS_MAX_COL = BASE_CONFIG_KEY + ".hbase.metrics_max_column";
 
     private Connection _hbaseConnection;
-    private HBaseSchema _schema;
     private HBaseSerializer _serializer;
     private Table _metricsTable;
 
@@ -76,48 +75,37 @@ public class HBaseStore implements MetricStore {
 
         validateConfig(config);
 
-        this._schema = new HBaseSchema(config);
+        HBaseSchema schema = new HBaseSchema(config);
         Configuration hbaseConf = createHBaseConfiguration(config);
 
         try {
             this._hbaseConnection = ConnectionFactory.createConnection(hbaseConf);
             Admin hbaseAdmin = _hbaseConnection.getAdmin();
-            TableName name = _schema.metricsTableInfo.getTableName();
-            HTableDescriptor descriptor = _schema.metricsTableInfo.getDescriptor();
+            TableName name = schema.metricsTableInfo.getTableName();
+            HTableDescriptor descriptor = schema.metricsTableInfo.getDescriptor();
 
             if (!hbaseAdmin.tableExists(name)) {
                 hbaseAdmin.createTable(descriptor);
             }
 
-            this._metricsTable = _hbaseConnection.getTable(_schema.metricsTableInfo.getTableName());
-            this._serializer = new HBaseSerializer(_hbaseConnection, _schema);
+            this._metricsTable = _hbaseConnection.getTable(schema.metricsTableInfo.getTableName());
+            this._serializer = new HBaseSerializer(_hbaseConnection, schema);
         } catch (IOException e) {
             throw new MetricException("Could not connect to hbase " + e);
         }
-
-        // Benchmark stuff
-        List<String> metricNames = Arrays.asList("emitted", "transferred", "latency-complete", "latency-execute",
-                "latency-process", "acked", "failed");
-        ArrayList<HBaseBench> benchmarks = new ArrayList<>();
-
-        for (int i = 1; i <= 5; ++i) {
-            HBaseBench b = new HBaseBench(this, i).withMetricNames(metricNames);
-            benchmarks.add(b);
-        }
-
-        benchmarks.parallelStream().forEach(HBaseBench::run);
-
     }
 
     private void validateConfig(Map config) throws MetricException {
         // TODO: add rest of validation
 
-        if (!(config.containsKey(HBASE_ROOT_DIR))) {
+        if (!config.containsKey(HBASE_ROOT_DIR)) {
             throw new MetricException("Need HBase root dir");
         }
-        if (!(config.containsKey(RETENTION) && config.containsKey(RETENTION_UNIT))) {
-            throw new MetricException("Need retention value/units");
+
+        if (!config.containsKey(HBASE_METRICS_TABLE)) {
+            throw new MetricException("Need metrics table");
         }
+
     }
 
     private Configuration createHBaseConfiguration(Map config) {
@@ -276,6 +264,15 @@ public class HBaseStore implements MetricStore {
             LOG.error("Could not delete metrics " + e);
         }
 
+    }
+
+    // testing only
+    public HBaseSerializer getSerializer() {
+        return this._serializer;
+    }
+
+    public Table getMetricsTable() {
+        return this._metricsTable;
     }
 
 }
