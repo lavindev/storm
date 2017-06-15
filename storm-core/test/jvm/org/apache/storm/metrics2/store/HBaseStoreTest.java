@@ -18,18 +18,28 @@
 package org.apache.storm.metrics2.store;
 
 
-import clojure.lang.Obj;
+import org.apache.commons.exec.ExecuteException;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.zookeeper.MiniZooKeeperCluster;
+import org.apache.storm.Config;
 import org.apache.storm.generated.Window;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.isA;
 
 import static java.util.Collections.max;
 import static java.util.Collections.min;
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 
 
+import org.mockito.runners.MockitoJUnitRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,13 +48,9 @@ import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.client.*;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.HConstants;
 import org.apache.storm.utils.Time;
+import org.apache.hadoop.hbase.HBaseTestingUtility;
 
 public class HBaseStoreTest {
 
@@ -57,11 +63,18 @@ public class HBaseStoreTest {
     private final static int ZOOKEEPER_PORT = 2181;
     private final static int ZOOKEEPER_SESSION_TIMEOUT = 20000;
 
-    private HBaseStore store;
-    private Map conf;
+    private static HBaseStore store;
+    private static HashMap<String, Object> conf;
+    private static HBaseTestingUtility testUtil;
+    private static Table metricsTable;
+    private static HBaseSerializer serializer;
+    private static Random random = new Random();
 
+    private static HashMap<String, Object> makeConfig() {
+        return makeConfig("storm.zookeeper");
+    }
 
-    private Map makeConfig() {
+    private static HashMap<String, Object> makeConfig(String zkPrefix) {
 
         HashMap<String, Object> confMap = new HashMap<String, Object>();
 
@@ -69,10 +82,10 @@ public class HBaseStoreTest {
         confMap.put("storm.metrics2.store.HBaseStore.hbase.metrics_table", HBASE_METRICS_TABLE);
         confMap.put("storm.metrics2.store.HBaseStore.retention", RETENTION);
         confMap.put("storm.metrics2.store.HBaseStore.retention.units", RETENTION_UNITS);
-        confMap.put("storm.zookeeper.servers", ZOOKEEPER_SERVERS);
-        confMap.put("storm.zookeeper.port", ZOOKEEPER_PORT);
-        confMap.put("storm.zookeeper.root", ZOOKEEPER_ROOT);
-        confMap.put("storm.zookeeper.session.timeout", ZOOKEEPER_SESSION_TIMEOUT);
+        confMap.put(zkPrefix + ".servers", ZOOKEEPER_SERVERS);
+        confMap.put(zkPrefix + ".port", ZOOKEEPER_PORT);
+        confMap.put(zkPrefix + ".root", ZOOKEEPER_ROOT);
+        confMap.put(zkPrefix + ".session.timeout", ZOOKEEPER_SESSION_TIMEOUT);
 
         // metadata map
         HashMap<String, Object> metaDataMap = new HashMap<String, Object>();
@@ -111,12 +124,12 @@ public class HBaseStoreTest {
         return confMap;
     }
 
-    private Metric makeMetric() {
+    private static Metric makeMetric() {
         long ts = (long) Time.currentTimeSecs();
         return makeMetric(ts);
     }
 
-    private Metric makeMetric(long ts) {
+    private static Metric makeMetric(long ts) {
 
         Metric m = new Metric("testMetric", ts,
                 "testExecutor",
@@ -128,12 +141,12 @@ public class HBaseStoreTest {
         return m;
     }
 
-    private Metric makeAggMetric() {
+    private static Metric makeAggMetric() {
         long ts = (long) Time.currentTimeSecs();
         return makeAggMetric(ts);
     }
 
-    private Metric makeAggMetric(long ts) {
+    private static Metric makeAggMetric(long ts) {
 
         Metric m = makeMetric(ts);
         m.setAggLevel((byte) 1);
@@ -158,25 +171,72 @@ public class HBaseStoreTest {
         }
     }
 
-    @Before
-    public void setUp() {
-        this.store = new HBaseStore();
-        this.conf = makeConfig();
+    private static Configuration createHBaseConfiguration(Map config) {
+        // TODO: read from config, fix cast?
+        Configuration conf = HBaseConfiguration.create();
+
+        Object zookeeperServers = config.get("storm.metrics2.store.HBaseStore.zookeeper.servers");
+        String zkPrefix = (zookeeperServers == null) ? "storm.zookeeper" : "storm.metrics2.store.HBaseStore.zookeeper";
+
+        String hbaseRootDir = (String) config.get("storm.metrics2.store.HBaseStore.hbase.root_dir");
+        String zookeeperQuorum = String.join(";", (List) config.get(zkPrefix + ".servers"));
+        String zookeeperRoot = (String) config.get(zkPrefix + ".root");
+        int zookeeperPort = (int) config.get(zkPrefix + ".port");
+        int zookeeperSessionTimeout = (int) config.get(zkPrefix + ".session.timeout");
+        // TODO : username/password - null
+
+        conf.set(HConstants.ZOOKEEPER_QUORUM, zookeeperQuorum);
+        conf.set(HConstants.ZOOKEEPER_DATA_DIR, zookeeperRoot);
+        conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zookeeperPort);
+        conf.setInt(HConstants.ZK_SESSION_TIMEOUT, zookeeperSessionTimeout);
+
+        // security
+        //conf.set("hbase.security.authentication", "kerberos");
+        //conf.set("hbase.rpc.protection", "privacy");
+
+        return conf;
+    }
+
+
+    @BeforeClass
+    public static void setUp() {
+
+        conf = makeConfig();
+        store = new HBaseStore();
+        Configuration hbaseConf = createHBaseConfiguration(conf);
+
+        testUtil = new HBaseTestingUtility(hbaseConf);
+
         try {
+            testUtil.startMiniCluster();
+
+            // set ZK info from test cluster - not the same as passed in above
+            int zkPort = testUtil.getZkCluster().getClientPort();
+            conf.put("storm.metrics2.store.HBaseStore.zookeeper.port", zkPort);
+            conf.put("storm.zookeeper.port", zkPort);
+
             store.prepare(conf);
+            metricsTable = store.getMetricsTable();
         } catch (Exception e) {
             fail("Unexpected exception" + e);
         }
+
     }
 
-    @Test
-    public void testPrepare() {
-        // redundant
+    @AfterClass
+    public static void tearDown() {
+        try {
+            testUtil.shutdownMiniCluster();
+        } catch (Exception e) {
+            fail("Unexpected - " + e);
+        }
     }
+
 
     @Test
     public void testPrepareInvalidConf() {
-        this.store = new HBaseStore();
+        HBaseStore store = new HBaseStore();
+        Map conf = makeConfig();
         // call prepare() with one config entry missing each iteration
         for (Object key : conf.keySet()) {
             TreeMap<String, Object> testMap = new TreeMap<String, Object>(conf);
@@ -190,45 +250,78 @@ public class HBaseStoreTest {
             }
             assertTrue(exceptionThrown);
         }
-
     }
+
 
     @Test
     public void testInsert() {
-        Logger log = Mockito.mock(Logger.class);
-
         Metric m = makeMetric(1234567);
         store.insert(m);
 
-        Mockito.verifyZeroInteractions(log);
+        ResultScanner scanner;
+        Scan s = new Scan();
+        try {
+            scanner = metricsTable.getScanner(s);
+        } catch (Exception e) {
+            fail("Unexpected - " + e);
+            return;
+        }
+
+        for (Result result : scanner) {
+            long ts = result.rawCells()[0].getTimestamp();
+            if (m.getTimeStamp() == ts) {
+                return;
+            }
+        }
+
+        fail("Could not find metric in store.");
+
     }
 
     @Test
     public void testInsertAgg() {
-
-        Logger log = Mockito.mock(Logger.class);
-
         Metric m = makeAggMetric(1234567);
         store.insert(m);
 
-        Mockito.verifyZeroInteractions(log);
+        ResultScanner scanner;
+        Scan s = new Scan();
+        try {
+            scanner = metricsTable.getScanner(s);
+        } catch (Exception e) {
+            fail("Unexpected - " + e);
+            return;
+        }
+
+        for (Result result : scanner) {
+            long ts = result.rawCells()[0].getTimestamp();
+            if (m.getTimeStamp() == ts) {
+                return;
+            }
+        }
+
+        fail("Could not find metric in store.");
     }
+
 
     @Test
     public void testScan() {
 
-        Metric m = makeMetric(9876);
-        store.insert(m);
+        ArrayList<Metric> metricsList = new ArrayList<>(10);
 
-        Integer aggLevel = m.getAggLevel().intValue();
-        String topoIdStr = m.getTopoIdStr();
+        for (int i = 1; i <= 10; i++) {
+            Metric m = makeMetric(random.nextLong());
+            metricsList.add(m);
+        }
+
+        Integer aggLevel = metricsList.get(0).getAggLevel().intValue();
+        String topoIdStr = metricsList.get(0).getTopoIdStr();
 
         HashMap<String, Object> settings = new HashMap<>();
         settings.put(StringKeywords.aggLevel, aggLevel);
         settings.put(StringKeywords.topoId, topoIdStr);
 
         store.scan(settings, (metric, timeRanges) -> {
-            assertMetricEqual(m, metric);
+            assertTrue(metricsList.contains(metric));
         });
 
     }
@@ -243,6 +336,7 @@ public class HBaseStoreTest {
         newMetric.setValue(0.00);
         newMetric.setCount(0L);
 
+        // check that newMetric has values populated from inserted metric
         store.populateValue(newMetric);
         assertNotEquals(0L, newMetric.getCount());
         assertNotEquals(0.00, newMetric.getValue(), 0.00001);
@@ -250,6 +344,7 @@ public class HBaseStoreTest {
         assertNotEquals(0.00, newMetric.getMin(), 0.00001);
         assertNotEquals(0.00, newMetric.getMax(), 0.00001);
 
+        // check that invalid new metric isn't populated
         newMetric.setTopoIdStr("BAD TOPOLOGY");
         newMetric.setValue(0.00);
         newMetric.setCount(0L);
@@ -263,9 +358,9 @@ public class HBaseStoreTest {
     }
 
     @Test
-    public void testRemove(){
+    public void testRemove() {
 
-        for (int i = 1; i <= 10; ++i){
+        for (int i = 1; i <= 10; ++i) {
             Metric m = makeMetric(i);
             store.insert(m);
         }
@@ -285,9 +380,6 @@ public class HBaseStoreTest {
             retrievedMetrics.add(metric);
         });
 
-        assertEquals(10, retrievedMetrics.size());
-
-
         retrievedMetrics.clear();
 
         // remove metrics
@@ -301,5 +393,6 @@ public class HBaseStoreTest {
         assertEquals(0, retrievedMetrics.size());
 
     }
+
 
 }
