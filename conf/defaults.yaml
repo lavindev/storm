@@ -304,40 +304,82 @@ storm.metrics2.store.HBaseStore.retention: 1
 storm.metrics2.store.HBaseStore.retention.units: "MINUTES"
 storm.metrics2.store.HBaseStore.hbase.root_dir: "/tmp/hbase"
 storm.metrics2.store.HBaseStore.hbase.schema:
+    type: "compact"
+#    metrics:
+#        name: "metrics"
+#        cf: "c"
+#        columns:
+#            value: "v"
+#            sum: "s"
+#            count: "c"
+#            min: "i"
+#            max: "a"
     metrics:
         name: "metrics"
         cf: "c"
-        columns:
-            value: "v"
-            sum: "s"
-            count: "c"
-            min: "i"
-            max: "a"
+        column: "c"
+#    metadata:
+#        topoMap:
+#            name: "topoMap"
+#            cf: "c"
+#            column: "c"
+#            refcounter: "REFCOUNTER"
+#        streamMap:
+#            name: "streamMap"
+#            cf: "c"
+#            column: "c"
+#            refcounter: "REFCOUNTER"
+#        hostMap:
+#            name: "hostMap"
+#            cf: "c"
+#            column: "c"
+#            refcounter: "REFCOUNTER"
+#        compMap:
+#            name: "compMap"
+#            cf: "c"
+#            column: "c"
+#            refcounter: "REFCOUNTER"
+#        metricMap:
+#            name: "metricMap"
+#            cf: "c"
+#            column: "c"
+#            refcounter: "REFCOUNTER"
+#        executorMap:
+#            name: "executorMap"
+#            cf: "c"
+#            column: "c"
+#            refcounter: "REFCOUNTER"
     metadata:
         topoMap:
-            name: "topoMap"
+            name: "metrics"
             cf: "c"
-            column: "c"
+            column: "topo"
+            refcounter: "REFCOUNTERtopo"
         streamMap:
-            name: "streamMap"
+            name: "metrics"
             cf: "c"
-            column: "c"
+            column: "stream"
+            refcounter: "REFCOUNTERstream"
         hostMap:
-            name: "hostMap"
+            name: "metrics"
             cf: "c"
-            column: "c"
+            column: "host"
+            refcounter: "REFCOUNTERhost"
         compMap:
-            name: "compMap"
+            name: "metrics"
             cf: "c"
-            column: "c"
+            column: "comp"
+            refcounter: "REFCOUNTERcomp"
         metricMap:
-            name: "metricMap"
+            name: "metrics"
             cf: "c"
-            column: "c"
+            column: "metric"
+            refcounter: "REFCOUNTERmetric"
         executorMap:
-            name: "executorMap"
+            name: "metrics"
             cf: "c"
-            column: "c"
+            column: "executor"
+            refcounter: "REFCOUNTERexecutor"
 
 
 storm.metrics.reporters:

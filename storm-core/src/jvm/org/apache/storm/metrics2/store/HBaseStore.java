@@ -33,32 +33,11 @@ import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.HConstants;
 
+import static org.apache.storm.metrics2.store.ConfigKeywords.*;
+
 public class HBaseStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseStore.class);
 
-    private final static String BASE_CONFIG_KEY = "storm.metrics2.store.HBaseStore";
-    private final static String HBASE_ZK_KEY = BASE_CONFIG_KEY + ".zookeeper";
-    private final static String STORM_ZK_KEY = "storm.zookeeper";
-
-    private final static String ZOOKEEPER_SERVERS = ".servers";
-    private final static String ZOOKEEPER_PORT = ".port";
-    private final static String ZOOKEEPER_ROOT = ".root";
-    private final static String ZOOKEEPER_SESSION_TIMEOUT = ".session.timeout";
-
-    private final static String RETENTION = BASE_CONFIG_KEY + ".retention";
-    private final static String RETENTION_UNIT = BASE_CONFIG_KEY + ".retention.units";
-
-    private final static String HBASE_ROOT_DIR = BASE_CONFIG_KEY + ".hbase.root_dir";
-    private final static String HBASE_META_TABLE = BASE_CONFIG_KEY + ".hbase.metrics_table";
-    private final static String HBASE_META_CF = BASE_CONFIG_KEY + ".hbase.meta_cf";
-    private final static String HBASE_META_COL = BASE_CONFIG_KEY + ".hbase.meta_column";
-    private final static String HBASE_METRICS_TABLE = BASE_CONFIG_KEY + ".hbase.metrics_table";
-    private final static String HBASE_METRICS_CF = BASE_CONFIG_KEY + ".hbase.metrics_cf";
-    private final static String HBASE_METRICS_VALUE_COL = BASE_CONFIG_KEY + ".hbase.metrics_value_column";
-    private final static String HBASE_METRICS_COUNT_COL = BASE_CONFIG_KEY + ".hbase.metrics_count_column";
-    private final static String HBASE_METRICS_SUM_COL = BASE_CONFIG_KEY + ".hbase.metrics_sum_column";
-    private final static String HBASE_METRICS_MIN_COL = BASE_CONFIG_KEY + ".hbase.metrics_min_column";
-    private final static String HBASE_METRICS_MAX_COL = BASE_CONFIG_KEY + ".hbase.metrics_max_column";
 
     private Connection _hbaseConnection;
     private HBaseSerializer _serializer;
@@ -89,7 +68,8 @@ public class HBaseStore implements MetricStore {
             }
 
             this._metricsTable = _hbaseConnection.getTable(schema.metricsTableInfo.getTableName());
-            this._serializer = new HBaseSerializer(_hbaseConnection, schema);
+            this._serializer = HBaseSerializer.createSerializer(_hbaseConnection, schema);
+
         } catch (IOException e) {
             throw new MetricException("Could not connect to hbase " + e);
         }
@@ -102,8 +82,20 @@ public class HBaseStore implements MetricStore {
             throw new MetricException("Need HBase root dir");
         }
 
-        if (!config.containsKey(HBASE_METRICS_TABLE)) {
-            throw new MetricException("Need metrics table");
+        String zkPrefix = null;
+        if (config.containsKey(HBASE_ZK_KEY + ZOOKEEPER_SERVERS)) {
+            zkPrefix = HBASE_ZK_KEY;
+        } else if (config.containsKey(STORM_ZK_KEY + ZOOKEEPER_SERVERS)) {
+            zkPrefix = STORM_ZK_KEY;
+        }
+
+        if (zkPrefix == null)
+            throw new MetricException("Need either hbase or storm ZK servers");
+
+        if (!config.containsKey(zkPrefix + ZOOKEEPER_PORT) ||
+                !config.containsKey(zkPrefix + ZOOKEEPER_ROOT) ||
+                !config.containsKey(zkPrefix + ZOOKEEPER_SESSION_TIMEOUT)) {
+            throw new MetricException("Need ZK port/root/session timeout.");
         }
 
     }

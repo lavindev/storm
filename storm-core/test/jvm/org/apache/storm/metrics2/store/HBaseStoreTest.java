@@ -18,103 +18,83 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.commons.exec.ExecuteException;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.*;
-import org.apache.hadoop.hbase.zookeeper.MiniZooKeeperCluster;
-import org.apache.storm.Config;
-import org.apache.storm.generated.Window;
-import org.junit.*;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.isA;
-
-import static java.util.Collections.max;
-import static java.util.Collections.min;
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.when;
-
-
-import org.mockito.runners.MockitoJUnitRunner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
 import java.util.*;
 
+import org.apache.hadoop.hbase.*;
+import org.apache.storm.generated.Window;
+import org.junit.*;
+
+import static org.junit.Assert.*;
+
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.storm.utils.Time;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 
 public class HBaseStoreTest {
 
+    // manual parameters
+    private final static String DEFAULT_ZK_PREFIX = "storm.metrics2.store.HBaseStore.zookeeper";
+    private final static String SCHEMA_TYPE = "compact";
+
     private final static String HBASE_ROOT_DIR = "/tmp/hbase";
-    private final static String HBASE_METRICS_TABLE = "metrics";
-    private final static int RETENTION = 1;
-    private final static String RETENTION_UNITS = "MINUTES";
     private final static String ZOOKEEPER_ROOT = "/storm";
     private final static List<String> ZOOKEEPER_SERVERS = Arrays.asList("localhost");
     private final static int ZOOKEEPER_PORT = 2181;
     private final static int ZOOKEEPER_SESSION_TIMEOUT = 20000;
 
     private static HBaseStore store;
-    private static HashMap<String, Object> conf;
     private static HBaseTestingUtility testUtil;
     private static Table metricsTable;
-    private static HBaseSerializer serializer;
     private static Random random = new Random();
 
     private static HashMap<String, Object> makeConfig() {
-        return makeConfig("storm.zookeeper");
+        return makeConfig(DEFAULT_ZK_PREFIX);
     }
 
     private static HashMap<String, Object> makeConfig(String zkPrefix) {
 
-        HashMap<String, Object> confMap = new HashMap<String, Object>();
+        HashMap<String, Object> confMap = new HashMap<>();
 
         confMap.put("storm.metrics2.store.HBaseStore.hbase.root_dir", HBASE_ROOT_DIR);
-        confMap.put("storm.metrics2.store.HBaseStore.hbase.metrics_table", HBASE_METRICS_TABLE);
-        confMap.put("storm.metrics2.store.HBaseStore.retention", RETENTION);
-        confMap.put("storm.metrics2.store.HBaseStore.retention.units", RETENTION_UNITS);
         confMap.put(zkPrefix + ".servers", ZOOKEEPER_SERVERS);
         confMap.put(zkPrefix + ".port", ZOOKEEPER_PORT);
         confMap.put(zkPrefix + ".root", ZOOKEEPER_ROOT);
         confMap.put(zkPrefix + ".session.timeout", ZOOKEEPER_SESSION_TIMEOUT);
 
         // metadata map
-        HashMap<String, Object> metaDataMap = new HashMap<String, Object>();
+        HashMap<String, Object> metaDataMap = new HashMap<>();
         List<String> metadataNames = Arrays.asList("topoMap", "streamMap", "hostMap",
                 "compMap", "metricMap", "executorMap");
 
         metadataNames.forEach((name) -> {
-            HashMap<String, String> m = new HashMap<String, String>();
+            HashMap<String, String> m = new HashMap<>();
             m.put("name", name);
             m.put("cf", "c");
             m.put("column", "c");
+            m.put("refcounter", "REFCOUNTER");
             metaDataMap.put(name, m);
         });
 
         // columns map & metrics map
-        HashMap<String, String> columnsMap = new HashMap<String, String>();
+        HashMap<String, String> columnsMap = new HashMap<>();
         columnsMap.put("value", "v");
         columnsMap.put("sum", "s");
         columnsMap.put("count", "c");
         columnsMap.put("min", "i");
         columnsMap.put("max", "a");
 
-        HashMap<String, Object> metricsMap = new HashMap<String, Object>();
+        HashMap<String, Object> metricsMap = new HashMap<>();
         metricsMap.put("name", "metrics");
         metricsMap.put("cf", "c");
-        metricsMap.put("columns", columnsMap);
+        if (SCHEMA_TYPE.equals("compact"))
+            metricsMap.put("column", "c");
+        else if (SCHEMA_TYPE.equals("expanded"))
+            metricsMap.put("columns", columnsMap);
 
         // schema map
-        HashMap<String, Object> schemaMap = new HashMap<String, Object>();
+        HashMap<String, Object> schemaMap = new HashMap<>();
+        schemaMap.put("type", SCHEMA_TYPE);
         schemaMap.put("metrics", metricsMap);
         schemaMap.put("metadata", metaDataMap);
 
@@ -122,11 +102,6 @@ public class HBaseStoreTest {
 
 
         return confMap;
-    }
-
-    private static Metric makeMetric() {
-        long ts = (long) Time.currentTimeSecs();
-        return makeMetric(ts);
     }
 
     private static Metric makeMetric(long ts) {
@@ -138,12 +113,8 @@ public class HBaseStoreTest {
                 "testTopo",
                 123.45);
         m.setHost("testHost");
+        m.setValue(123.45);
         return m;
-    }
-
-    private static Metric makeAggMetric() {
-        long ts = (long) Time.currentTimeSecs();
-        return makeAggMetric(ts);
     }
 
     private static Metric makeAggMetric(long ts) {
@@ -159,20 +130,8 @@ public class HBaseStoreTest {
         return m;
     }
 
-    private void assertMetricEqual(Metric expected, Metric actual) {
-
-        // TODO: add all
-        assertEquals(expected.getAggLevel(), actual.getAggLevel());
-        assertEquals(expected.getTopoIdStr(), actual.getTopoIdStr());
-        assertEquals(expected.getTimeStamp(), actual.getTimeStamp());
-
-        if (expected.getAggLevel() == 0) {
-            // clear sum/min/max
-        }
-    }
-
     private static Configuration createHBaseConfiguration(Map config) {
-        // TODO: read from config, fix cast?
+
         Configuration conf = HBaseConfiguration.create();
 
         Object zookeeperServers = config.get("storm.metrics2.store.HBaseStore.zookeeper.servers");
@@ -183,8 +142,8 @@ public class HBaseStoreTest {
         String zookeeperRoot = (String) config.get(zkPrefix + ".root");
         int zookeeperPort = (int) config.get(zkPrefix + ".port");
         int zookeeperSessionTimeout = (int) config.get(zkPrefix + ".session.timeout");
-        // TODO : username/password - null
 
+        conf.set(HConstants.HBASE_DIR, hbaseRootDir);
         conf.set(HConstants.ZOOKEEPER_QUORUM, zookeeperQuorum);
         conf.set(HConstants.ZOOKEEPER_DATA_DIR, zookeeperRoot);
         conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zookeeperPort);
@@ -201,7 +160,7 @@ public class HBaseStoreTest {
     @BeforeClass
     public static void setUp() {
 
-        conf = makeConfig();
+        HashMap<String, Object> conf = makeConfig();
         store = new HBaseStore();
         Configuration hbaseConf = createHBaseConfiguration(conf);
 
@@ -232,26 +191,23 @@ public class HBaseStoreTest {
         }
     }
 
-
     @Test
     public void testPrepareInvalidConf() {
-        HBaseStore store = new HBaseStore();
-        Map conf = makeConfig();
-        // call prepare() with one config entry missing each iteration
-        for (Object key : conf.keySet()) {
-            TreeMap<String, Object> testMap = new TreeMap<String, Object>(conf);
-            testMap.remove((String) key);
-
-            boolean exceptionThrown = false;
-            try {
-                store.prepare(testMap);
-            } catch (MetricException e) {
-                exceptionThrown = true;
-            }
-            assertTrue(exceptionThrown);
-        }
+//        HBaseStore store = new HBaseStore();
+//        // call prepare() with one config entry missing each iteration
+//        for (Object key : conf.keySet()) {
+//            TreeMap<String, Object> testMap = new TreeMap<String, Object>(conf);
+//            testMap.remove((String) key);
+//
+//            boolean exceptionThrown = false;
+//            try {
+//                store.prepare(testMap);
+//            } catch (MetricException e) {
+//                exceptionThrown = true;
+//            }
+//            assertTrue(exceptionThrown);
+//        }
     }
-
 
     @Test
     public void testInsert() {
@@ -302,15 +258,15 @@ public class HBaseStoreTest {
         fail("Could not find metric in store.");
     }
 
-
     @Test
     public void testScan() {
 
         ArrayList<Metric> metricsList = new ArrayList<>(10);
 
         for (int i = 1; i <= 10; i++) {
-            Metric m = makeMetric(random.nextLong());
+            Metric m = makeMetric((long) random.nextInt(999));
             metricsList.add(m);
+            store.insert(m);
         }
 
         Integer aggLevel = metricsList.get(0).getAggLevel().intValue();
@@ -320,9 +276,7 @@ public class HBaseStoreTest {
         settings.put(StringKeywords.aggLevel, aggLevel);
         settings.put(StringKeywords.topoId, topoIdStr);
 
-        store.scan(settings, (metric, timeRanges) -> {
-            assertTrue(metricsList.contains(metric));
-        });
+        store.scan(settings, (metric, timeRanges) -> assertTrue(metricsList.contains(metric)));
 
     }
 
@@ -364,21 +318,26 @@ public class HBaseStoreTest {
             Metric m = makeMetric(i);
             store.insert(m);
         }
+        for (int i = 101; i <= 110; ++i) {
+            Metric m = makeMetric(i);
+            store.insert(m);
+        }
 
         HashMap<String, Object> settings = new HashMap<>();
         HashSet<TimeRange> timeRangeSet = new HashSet<>();
         timeRangeSet.add(new TimeRange(1L, 10L + 1L, Window.ALL));
+        timeRangeSet.add(new TimeRange(101L, 110L + 1L, Window.ALL));
 
         settings.put(StringKeywords.aggLevel, 0);
         settings.put(StringKeywords.topoId, "testTopo");
         settings.put(StringKeywords.timeRangeSet, timeRangeSet);
 
-        // scan for inserted metrics, should have all 10
+        // scan for inserted metrics, should have all 20
         HashSet<Metric> retrievedMetrics = new HashSet<>();
 
-        store.scan(settings, (metric, timeRanges) -> {
-            retrievedMetrics.add(metric);
-        });
+        store.scan(settings, (metric, timeRanges) -> retrievedMetrics.add(metric));
+
+        assertEquals(20, retrievedMetrics.size());
 
         retrievedMetrics.clear();
 
@@ -386,9 +345,7 @@ public class HBaseStoreTest {
         store.remove(settings);
 
         // scan again, should have nil
-        store.scan(settings, (metric, timeRanges) -> {
-            retrievedMetrics.add(metric);
-        });
+        store.scan(settings, (metric, timeRanges) -> retrievedMetrics.add(metric));
 
         assertEquals(0, retrievedMetrics.size());
 

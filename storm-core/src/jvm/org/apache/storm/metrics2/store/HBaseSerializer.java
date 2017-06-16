@@ -17,29 +17,24 @@
  */
 package org.apache.storm.metrics2.store;
 
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
-import org.apache.hadoop.hbase.client.coprocessor.AggregationClient;
-import org.apache.hadoop.hbase.security.visibility.CellVisibility;
-import org.apache.hadoop.hbase.util.ByteBufferArray;
-import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.hdfs.util.ByteArray;
 import org.apache.storm.generated.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-import static java.lang.Integer.max;
-import static java.lang.Integer.min;
 import static org.apache.storm.metrics2.store.HBaseSerializer.MetaDataIndex.*;
 
-public class HBaseSerializer {
+public abstract class HBaseSerializer {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseSerializer.class);
 
     private class MetaData {
@@ -71,13 +66,23 @@ public class HBaseSerializer {
         }
     }
 
-    private final static byte[] REFCOUNTER = Bytes.toBytes("REFCOUNTER");
+    protected Connection _hbaseConnection;
+    protected HBaseSchema _schema;
 
-    private Connection _hbaseConnection;
-    private HBaseSchema _schema;
-
-    private Table metricsTable;
     private MetaData[] metaData;
+
+    public static HBaseSerializer createSerializer(Connection hbaseConnection, HBaseSchema schema)
+            throws MetricException {
+
+        HBaseSchemaType type = schema.getSchemaType();
+        try {
+            Class<?> clazz = Class.forName(type.getClassName());
+            Constructor<?> ctor = clazz.getConstructor(Connection.class, HBaseSchema.class);
+            return (HBaseSerializer) ctor.newInstance(hbaseConnection, schema);
+        } catch (Exception e) {
+            throw new MetricException("Could not initialize serializer - " + e);
+        }
+    }
 
     public HBaseSerializer(Connection hbaseConnection, HBaseSchema schema) {
 
@@ -87,30 +92,9 @@ public class HBaseSerializer {
         this._schema = schema;
         this.metaData = new MetaData[MetaDataIndex.count()];
 
-        assignMetricsTable();
-
         for (MetaDataIndex index : MetaDataIndex.values()) {
             assignMetaDataTable(index);
             initializeMap(index);
-        }
-
-    }
-
-    private void assignMetricsTable() {
-
-        try {
-            Admin hbaseAdmin = _hbaseConnection.getAdmin();
-            TableName name = _schema.metricsTableInfo.getTableName();
-            HTableDescriptor descriptor = _schema.metricsTableInfo.getDescriptor();
-
-            if (!hbaseAdmin.tableExists(name)) {
-                hbaseAdmin.createTable(descriptor);
-            }
-
-            this.metricsTable = _hbaseConnection.getTable(_schema.metricsTableInfo.getTableName());
-
-        } catch (IOException e) {
-            LOG.error("Could not assign metrics table", e);
         }
 
     }
@@ -129,10 +113,13 @@ public class HBaseSerializer {
             this.metaData[i].table = _hbaseConnection.getTable(name);
 
             // set column counter
+            byte[] refcounter = info.getRefcounter();
             byte[] value = Bytes.toBytes(0L);
-            Put p = new Put(REFCOUNTER);
-            p.addColumn(info.getColumnFamily(), info.getColumn(), value);
-            metaData[i].table.checkAndPut(REFCOUNTER, info.getColumnFamily(), info.getColumn(), null, p);
+            byte[] cf = info.getColumnFamily();
+            byte[] column = info.getColumn();
+            Put p = new Put(refcounter);
+            p.addColumn(cf, column, value);
+            metaData[i].table.checkAndPut(refcounter, cf, column, null, p);
 
         } catch (IOException e) {
             LOG.error("Could not assign metrics table", e);
@@ -208,6 +195,7 @@ public class HBaseSerializer {
         byte[] key = Bytes.toBytes(keyStr);
         byte[] columnFamily = info.getColumnFamily();
         byte[] column = info.getColumn();
+        byte[] refcounter = info.getRefcounter();
 
         // check if exists in DB
         Get g = new Get(key);
@@ -226,11 +214,11 @@ public class HBaseSerializer {
 
         // get ref counter
         Integer counter;
-        Increment inc = new Increment(REFCOUNTER);
+        Increment inc = new Increment(refcounter);
         inc.setReturnResults(true);
 
         try {
-            counter = (int) meta.table.incrementColumnValue(REFCOUNTER, columnFamily, column, 1);
+            counter = (int) meta.table.incrementColumnValue(refcounter, columnFamily, column, 1);
         } catch (IOException e) {
             LOG.error("Could not get column ref", e);
             return null;
@@ -282,35 +270,7 @@ public class HBaseSerializer {
         return meta.rmap.get(ref);
     }
 
-    public Put createPutOperation(Metric m) throws MetricException {
-
-        HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
-
-        boolean isAggregate = m.getCount() > 1;
-
-        long timestamp = m.getTimeStamp();
-        byte[] key = createKey(m);
-        byte[] value = Bytes.toBytes(m.getValue());
-        byte[] count = Bytes.toBytes(m.getCount());
-        byte[] columnFamily = info.getColumnFamily();
-
-        Put p = new Put(key, timestamp);
-
-        p.addColumn(columnFamily, info.getValueColumn(), value);
-        p.addColumn(columnFamily, info.getCountColumn(), count);
-
-        if (isAggregate) {
-            byte[] sum = Bytes.toBytes(m.getSum());
-            byte[] min = Bytes.toBytes(m.getMin());
-            byte[] max = Bytes.toBytes(m.getMax());
-
-            p.addColumn(columnFamily, info.getSumColumn(), sum);
-            p.addColumn(columnFamily, info.getMinColumn(), min);
-            p.addColumn(columnFamily, info.getMaxColumn(), max);
-        }
-
-        return p;
-    }
+    public abstract Put createPutOperation(Metric m) throws MetricException;
 
     public byte[] createKey(Metric m) throws MetricException {
         Integer topoId = getRef(TOPOLOGY, m.getTopoIdStr());
@@ -381,41 +341,7 @@ public class HBaseSerializer {
         return true;
     }
 
-    public boolean populateMetricValue(Metric m, Result result) {
-        // TODO: avoid unnecessary lookups
-
-        HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
-        byte[] cf = info.getColumnFamily();
-
-        byte[] valueBytes = result.getValue(cf, info.getValueColumn());
-        byte[] countBytes = result.getValue(cf, info.getCountColumn());
-        byte[] sumBytes = result.getValue(cf, info.getSumColumn());
-        byte[] minBytes = result.getValue(cf, info.getMinColumn());
-        byte[] maxBytes = result.getValue(cf, info.getMaxColumn());
-
-        try {
-            double value = Bytes.toDouble(valueBytes);
-            long count = Bytes.toLong(countBytes);
-
-            m.setValue(value);
-            m.setCount(count);
-            if (count > 1) {
-                double sum = Bytes.toDouble(sumBytes);
-                double min = Bytes.toDouble(minBytes);
-                double max = Bytes.toDouble(maxBytes);
-
-                m.setSum(sum);
-                m.setMin(min);
-                m.setMax(max);
-            }
-
-            return true;
-        } catch (NullPointerException e) {
-            m.setValue(0.00);
-            m.setCount(0L);
-            return false;
-        }
-    }
+    public abstract boolean populateMetricValue(Metric m, Result result);
 
     public List<Scan> createScanOperation(HashMap<String, Object> settings) {
 
@@ -464,35 +390,6 @@ public class HBaseSerializer {
                 .withStreamId(streamId);
 
         return scan.getScanList();
-    }
-
-    private int getPrefixLength(HashMap<String, Object> settings) {
-
-        if (!settings.containsKey(StringKeywords.aggLevel))
-            return 0;
-
-        if (!settings.containsKey(StringKeywords.topoId))
-            return 1;
-
-        if (!settings.containsKey(StringKeywords.metricSet))
-            return 5;
-
-        if (!settings.containsKey(StringKeywords.component))
-            return 9;
-
-        if (!settings.containsKey(StringKeywords.executor))
-            return 13;
-
-        if (!settings.containsKey(StringKeywords.host))
-            return 17;
-
-        if (!settings.containsKey(StringKeywords.port))
-            return 21;
-
-        if (!settings.containsKey(StringKeywords.stream))
-            return 25;
-
-        return 33;
     }
 
     public Metric deserializeMetric(Result result) {
