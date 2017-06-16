@@ -23,12 +23,11 @@ import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+
+import static org.apache.storm.metrics2.store.ConfigKeywords.*;
 
 public class HBaseSchema {
-
-    private static final String SCHEMA_KEY = "storm.metrics2.store.HBaseStore.hbase.schema";
 
     public class MetricsTableInfo {
 
@@ -51,10 +50,10 @@ public class HBaseSchema {
             this.tableName = TableName.valueOf(tableName);
             this.columnFamily = Bytes.toBytes(columnFamily);
             this.valueColumn = Bytes.toBytes(valueColumn);
-            this.sumColumn = Bytes.toBytes(sumColumn);
-            this.countColumn = Bytes.toBytes(countColumn);
-            this.minColumn = Bytes.toBytes(minColumn);
-            this.maxColumn = Bytes.toBytes(maxColumn);
+            this.sumColumn = (sumColumn != null) ? Bytes.toBytes(sumColumn) : null;
+            this.countColumn = (countColumn != null) ? Bytes.toBytes(countColumn) : null;
+            this.minColumn = (minColumn != null) ? Bytes.toBytes(minColumn) : null;
+            this.maxColumn = (maxColumn != null) ? Bytes.toBytes(maxColumn) : null;
 
             HColumnDescriptor columnDescriptor = new HColumnDescriptor(columnFamily);
             this.descriptor = new HTableDescriptor(this.tableName).addFamily(columnDescriptor);
@@ -99,11 +98,13 @@ public class HBaseSchema {
         private HTableDescriptor descriptor;
         private byte[] columnFamily;
         private byte[] column;
+        private byte[] refcounter;
 
-        public MetadataTableInfo(String tableName, String columnFamily, String column) {
+        public MetadataTableInfo(String tableName, String columnFamily, String column, String refcounter) {
             this.tableName = TableName.valueOf(tableName);
             this.columnFamily = Bytes.toBytes(columnFamily);
             this.column = Bytes.toBytes(column);
+            this.refcounter = Bytes.toBytes(refcounter);
 
             HColumnDescriptor columnDescriptor = new HColumnDescriptor(columnFamily);
             this.descriptor = new HTableDescriptor(this.tableName).addFamily(columnDescriptor);
@@ -124,6 +125,10 @@ public class HBaseSchema {
         public byte[] getColumn() {
             return column;
         }
+
+        public byte[] getRefcounter() {
+            return refcounter;
+        }
     }
 
     private final static int TOPOLOGY = 0;
@@ -133,18 +138,26 @@ public class HBaseSchema {
     private final static int METRICNAME = 4;
     private final static int EXECUTOR = 5;
 
+
+    private HBaseSchemaType schemaType;
+
     public MetricsTableInfo metricsTableInfo;
     public MetadataTableInfo[] metadataTableInfos;
 
-    public HBaseSchema(Map conf) {
+    public HBaseSchema(Map conf) throws MetricException {
+
+        validateSchema(conf);
 
         HashMap<String, Object> schemaMap = (HashMap<String, Object>) conf.get(SCHEMA_KEY);
         HashMap<String, Object> metricsMap = (HashMap<String, Object>) schemaMap.get("metrics");
         HashMap<String, Object> metadataMap = (HashMap<String, Object>) schemaMap.get("metadata");
-        this.metadataTableInfos = new MetadataTableInfo[6];
+
+        String schemaTypeStr = (String) schemaMap.get("type");
+        this.schemaType = HBaseSchemaType.fromKey(schemaTypeStr);
 
         createMetricsDescriptor(metricsMap);
 
+        this.metadataTableInfos = new MetadataTableInfo[6];
         metadataMap.forEach((metadataType, map) -> {
             HashMap<String, String> tableMap = (HashMap<String, String>) map;
             createMetadataDescriptor(metadataType, tableMap);
@@ -152,20 +165,34 @@ public class HBaseSchema {
 
     }
 
-    private void createMetricsDescriptor(Map metricsMap) {
+    public HBaseSchemaType getSchemaType() {
+        return this.schemaType;
+    }
 
-        HashMap<String, String> columnMap = (HashMap<String, String>) metricsMap.get("columns");
+    private void createMetricsDescriptor(Map metricsMap) {
 
         String name = (String) metricsMap.get("name");
         String columnFamily = (String) metricsMap.get("cf");
-        String valueColumn = columnMap.get("value");
-        String sumColumn = columnMap.get("sum");
-        String countColumn = columnMap.get("count");
-        String minColumn = columnMap.get("min");
-        String maxColumn = columnMap.get("max");
 
-        this.metricsTableInfo = new MetricsTableInfo(name, columnFamily, valueColumn, sumColumn,
-                countColumn, minColumn, maxColumn);
+        if (schemaType == HBaseSchemaType.COMPACT) {
+
+            String valueColumn = (String) metricsMap.get("column");
+
+            this.metricsTableInfo = new MetricsTableInfo(name, columnFamily, valueColumn, null,
+                    null, null, null);
+
+        } else if (schemaType == HBaseSchemaType.EXPANDED) {
+
+            HashMap<String, String> columnMap = (HashMap<String, String>) metricsMap.get("columns");
+            String valueColumn = columnMap.get("value");
+            String sumColumn = columnMap.get("sum");
+            String countColumn = columnMap.get("count");
+            String minColumn = columnMap.get("min");
+            String maxColumn = columnMap.get("max");
+
+            this.metricsTableInfo = new MetricsTableInfo(name, columnFamily, valueColumn, sumColumn,
+                    countColumn, minColumn, maxColumn);
+        }
 
     }
 
@@ -174,8 +201,9 @@ public class HBaseSchema {
         String name = tableMap.get("name");
         String columnFamily = tableMap.get("cf");
         String column = tableMap.get("column");
+        String refcounter = tableMap.get("refcounter");
 
-        MetadataTableInfo info = new MetadataTableInfo(name, columnFamily, column);
+        MetadataTableInfo info = new MetadataTableInfo(name, columnFamily, column, refcounter);
 
         switch (metadataType) {
             case "topoMap":
@@ -200,5 +228,95 @@ public class HBaseSchema {
 
     }
 
+    private void validateSchema(Map conf) throws MetricException {
+
+        HashMap<String, Object> schemaMap = (HashMap<String, Object>) conf.get(SCHEMA_KEY);
+
+        if (schemaMap == null)
+            throw new MetricException("No schema specified");
+
+
+        String schemaTypeStr = (String) schemaMap.get("type");
+        HashMap<String, Object> metricsMap = (HashMap<String, Object>) schemaMap.get("metrics");
+        HashMap<String, Object> metadataMap = (HashMap<String, Object>) schemaMap.get("metadata");
+
+        if (schemaTypeStr == null)
+            throw new MetricException("No schema type specified");
+
+        if (metricsMap == null)
+            throw new MetricException("No metrics schema specified");
+
+        if (metadataMap == null)
+            throw new MetricException("No metadata schema specified");
+
+        HBaseSchemaType schemaType = HBaseSchemaType.fromKey(schemaTypeStr);
+
+        switch (schemaType) {
+            case COMPACT:
+                validateMetricsSchemaCompact(metricsMap);
+                break;
+            case EXPANDED:
+                validateMetricsSchemaExpanded(metricsMap);
+                break;
+            default:
+                throw new MetricException("Unknown schema type specfied");
+        }
+
+        validateMetadataSchema(metadataMap);
+
+    }
+
+    private void validateMetricsSchemaCompact(HashMap<String, Object> metricsMap) throws MetricException {
+
+        if (!metricsMap.containsKey("name") ||
+                !metricsMap.containsKey("cf") ||
+                !metricsMap.containsKey("column")) {
+            throw new MetricException("Invalid metrics map");
+        }
+
+    }
+
+    private void validateMetricsSchemaExpanded(HashMap<String, Object> metricsMap) throws MetricException {
+
+        if (!metricsMap.containsKey("name") ||
+                !metricsMap.containsKey("cf") ||
+                !metricsMap.containsKey("columns")) {
+            throw new MetricException("Invalid metrics map");
+        }
+
+        HashMap<String, String> metricsColumns = (HashMap<String, String>) metricsMap.get("columns");
+        if (!metricsColumns.containsKey("value") ||
+                !metricsColumns.containsKey("count") ||
+                !metricsColumns.containsKey("sum") ||
+                !metricsColumns.containsKey("min") ||
+                !metricsColumns.containsKey("max")) {
+            throw new MetricException("Invalid metrics columns map");
+        }
+    }
+
+    private void validateMetadataSchema(HashMap<String, Object> metadataMap) throws MetricException {
+
+        // Note: For metadata that share common tables, refcounter should ideally be unique
+        // We do not validate for this
+
+        List<String> metadataNames = Arrays.asList("topoMap",
+                "streamMap",
+                "hostMap",
+                "compMap",
+                "metricMap",
+                "executorMap");
+
+        for (String metaName : metadataNames) {
+            HashMap<String, String> metaMap = (HashMap<String, String>) metadataMap.get(metaName);
+
+            if (!metaMap.containsKey("name") ||
+                    !metaMap.containsKey("cf") ||
+                    !metaMap.containsKey("column") ||
+                    !metaMap.containsKey("refcounter")) {
+                throw new MetricException("Invalid metadata map for " + metaName);
+            }
+        }
+
+    }
 
 }
