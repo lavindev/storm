@@ -306,6 +306,7 @@ storm.metrics2.store.HBaseStore.hbase.root_dir: "/tmp/hbase"
 storm.metrics2.store.HBaseStore.hbase.schema:
     type: "compact"
 #    metrics:
+#        namespace: "storm_dev"
 #        name: "metrics"
 #        cf: "c"
 #        columns:
@@ -315,67 +316,80 @@ storm.metrics2.store.HBaseStore.hbase.schema:
 #            min: "i"
 #            max: "a"
     metrics:
+        namespace: "storm_dev"
         name: "metrics"
         cf: "c"
         column: "c"
 #    metadata:
 #        topoMap:
+#            namespace: "storm_dev"
 #            name: "topoMap"
 #            cf: "c"
 #            column: "c"
 #            refcounter: "REFCOUNTER"
 #        streamMap:
+#            namespace: "storm_dev"
 #            name: "streamMap"
 #            cf: "c"
 #            column: "c"
 #            refcounter: "REFCOUNTER"
 #        hostMap:
+#            namespace: "storm_dev"
 #            name: "hostMap"
 #            cf: "c"
 #            column: "c"
 #            refcounter: "REFCOUNTER"
 #        compMap:
+#            namespace: "storm_dev"
 #            name: "compMap"
 #            cf: "c"
 #            column: "c"
 #            refcounter: "REFCOUNTER"
 #        metricMap:
+#            namespace: "storm_dev"
 #            name: "metricMap"
 #            cf: "c"
 #            column: "c"
 #            refcounter: "REFCOUNTER"
 #        executorMap:
+#            namespace: "storm_dev"
 #            name: "executorMap"
 #            cf: "c"
 #            column: "c"
 #            refcounter: "REFCOUNTER"
     metadata:
         topoMap:
+            namespace: "storm_dev"
             name: "metrics"
             cf: "c"
             column: "topo"
             refcounter: "REFCOUNTERtopo"
         streamMap:
+            namespace: "storm_dev"
             name: "metrics"
             cf: "c"
             column: "stream"
             refcounter: "REFCOUNTERstream"
         hostMap:
+            namespace: "storm_dev"
             name: "metrics"
             cf: "c"
             column: "host"
             refcounter: "REFCOUNTERhost"
         compMap:
+            namespace: "storm_dev"
             name: "metrics"
             cf: "c"
             column: "comp"
             refcounter: "REFCOUNTERcomp"
         metricMap:
+            namespace: "storm_dev"
             name: "metrics"
             cf: "c"
             column: "metric"
             refcounter: "REFCOUNTERmetric"
         executorMap:
+            namespace: "storm_dev"
             name: "metrics"
             cf: "c"
             column: "executor"

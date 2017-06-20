@@ -43,14 +43,15 @@ public class HBaseSchema {
         private byte[] minColumn;
         private byte[] maxColumn;
 
-        public MetricsTableInfo(String tableName,
+        public MetricsTableInfo(String namespace,
+                                String tableName,
                                 String columnFamily,
                                 String valueColumn,
                                 String sumColumn,
                                 String countColumn,
                                 String minColumn,
                                 String maxColumn) {
-            this.tableName = TableName.valueOf(tableName);
+            this.tableName = TableName.valueOf(namespace, tableName);
             this.columnFamily = Bytes.toBytes(columnFamily);
             this.valueColumn = Bytes.toBytes(valueColumn);
             this.sumColumn = (sumColumn != null) ? Bytes.toBytes(sumColumn) : null;
@@ -104,8 +105,9 @@ public class HBaseSchema {
         private byte[] column;
         private byte[] refcounter;
 
-        public MetadataTableInfo(String tableName, String columnFamily, String column, String refcounter) {
-            this.tableName = TableName.valueOf(tableName);
+        public MetadataTableInfo(String namespace, String tableName, String columnFamily,
+                                 String column, String refcounter) {
+            this.tableName = TableName.valueOf(namespace, tableName);
             this.columnFamily = Bytes.toBytes(columnFamily);
             this.column = Bytes.toBytes(column);
             this.refcounter = Bytes.toBytes(refcounter);
@@ -168,6 +170,7 @@ public class HBaseSchema {
 
     private void createMetricsDescriptor(Map metricsMap) {
 
+        String namespace = (String) metricsMap.get("namespace");
         String name = (String) metricsMap.get("name");
         String columnFamily = (String) metricsMap.get("cf");
 
@@ -175,7 +178,7 @@ public class HBaseSchema {
 
             String valueColumn = (String) metricsMap.get("column");
 
-            this.metricsTableInfo = new MetricsTableInfo(name, columnFamily, valueColumn, null,
+            this.metricsTableInfo = new MetricsTableInfo(namespace, name, columnFamily, valueColumn, null,
                     null, null, null);
 
         } else if (schemaType == HBaseSchemaType.EXPANDED) {
@@ -187,7 +190,7 @@ public class HBaseSchema {
             String minColumn = columnMap.get("min");
             String maxColumn = columnMap.get("max");
 
-            this.metricsTableInfo = new MetricsTableInfo(name, columnFamily, valueColumn, sumColumn,
+            this.metricsTableInfo = new MetricsTableInfo(namespace, name, columnFamily, valueColumn, sumColumn,
                     countColumn, minColumn, maxColumn);
         }
 
@@ -195,12 +198,13 @@ public class HBaseSchema {
 
     private void createMetadataDescriptor(String metadataType, HashMap<String, String> tableMap) {
 
+        String namespace = tableMap.get("namespace");
         String name = tableMap.get("name");
         String columnFamily = tableMap.get("cf");
         String column = tableMap.get("column");
         String refcounter = tableMap.get("refcounter");
 
-        MetadataTableInfo info = new MetadataTableInfo(name, columnFamily, column, refcounter);
+        MetadataTableInfo info = new MetadataTableInfo(namespace, name, columnFamily, column, refcounter);
         int index = HBaseMetadataIndex.indexFromMapping(metadataType);
         metadataTableInfos[index] = info;
 
