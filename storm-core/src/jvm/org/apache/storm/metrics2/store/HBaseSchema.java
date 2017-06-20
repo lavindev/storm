@@ -23,9 +23,12 @@ import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import static org.apache.storm.metrics2.store.ConfigKeywords.*;
+import static org.apache.storm.metrics2.store.ConfigKeywords.SCHEMA_KEY;
 
 public class HBaseSchema {
 
@@ -56,7 +59,8 @@ public class HBaseSchema {
             this.maxColumn = (maxColumn != null) ? Bytes.toBytes(maxColumn) : null;
 
             HColumnDescriptor columnDescriptor = new HColumnDescriptor(columnFamily);
-            this.descriptor = new HTableDescriptor(this.tableName).addFamily(columnDescriptor);
+            this.descriptor = new HTableDescriptor(this.tableName);
+            this.descriptor.addFamily(columnDescriptor);
         }
 
         public TableName getTableName() {
@@ -107,7 +111,8 @@ public class HBaseSchema {
             this.refcounter = Bytes.toBytes(refcounter);
 
             HColumnDescriptor columnDescriptor = new HColumnDescriptor(columnFamily);
-            this.descriptor = new HTableDescriptor(this.tableName).addFamily(columnDescriptor);
+            this.descriptor = new HTableDescriptor(this.tableName);
+            this.descriptor.addFamily(columnDescriptor);
         }
 
         public TableName getTableName() {
@@ -130,14 +135,6 @@ public class HBaseSchema {
             return refcounter;
         }
     }
-
-    private final static int TOPOLOGY = 0;
-    private final static int STREAM = 1;
-    private final static int HOST = 2;
-    private final static int COMP = 3;
-    private final static int METRICNAME = 4;
-    private final static int EXECUTOR = 5;
-
 
     private HBaseSchemaType schemaType;
 
@@ -204,27 +201,8 @@ public class HBaseSchema {
         String refcounter = tableMap.get("refcounter");
 
         MetadataTableInfo info = new MetadataTableInfo(name, columnFamily, column, refcounter);
-
-        switch (metadataType) {
-            case "topoMap":
-                this.metadataTableInfos[TOPOLOGY] = info;
-                break;
-            case "streamMap":
-                this.metadataTableInfos[STREAM] = info;
-                break;
-            case "hostMap":
-                this.metadataTableInfos[HOST] = info;
-                break;
-            case "compMap":
-                this.metadataTableInfos[COMP] = info;
-                break;
-            case "metricMap":
-                this.metadataTableInfos[METRICNAME] = info;
-                break;
-            case "executorMap":
-                this.metadataTableInfos[EXECUTOR] = info;
-                break;
-        }
+        int index = HBaseMetadataIndex.indexFromMapping(metadataType);
+        metadataTableInfos[index] = info;
 
     }
 
@@ -296,7 +274,7 @@ public class HBaseSchema {
 
     private void validateMetadataSchema(HashMap<String, Object> metadataMap) throws MetricException {
 
-        // Note: For metadata that share common tables, refcounter should ideally be unique
+        // Note: For metadata that share common tables, refcounter should be unique
         // We do not validate for this
 
         List<String> metadataNames = Arrays.asList("topoMap",

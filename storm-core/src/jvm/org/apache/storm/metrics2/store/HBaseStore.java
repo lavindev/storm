@@ -18,30 +18,25 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
-import org.apache.storm.utils.Time;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.client.*;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.HConstants;
-
 import static org.apache.storm.metrics2.store.ConfigKeywords.*;
 
 public class HBaseStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseStore.class);
 
-
-    private Connection _hbaseConnection;
     private HBaseSerializer _serializer;
-    private Table _metricsTable;
+    private HTableInterface _metricsTable;
 
     /**
      * Create HBase instance
@@ -58,17 +53,17 @@ public class HBaseStore implements MetricStore {
         Configuration hbaseConf = createHBaseConfiguration(config);
 
         try {
-            this._hbaseConnection = ConnectionFactory.createConnection(hbaseConf);
-            Admin hbaseAdmin = _hbaseConnection.getAdmin();
-            TableName name = schema.metricsTableInfo.getTableName();
+            HConnection hbaseConnection = HConnectionManager.createConnection(hbaseConf);
+            HBaseAdmin hbaseAdmin = new HBaseAdmin(hbaseConnection);
             HTableDescriptor descriptor = schema.metricsTableInfo.getDescriptor();
+            TableName metricsTable = schema.metricsTableInfo.getTableName();
 
-            if (!hbaseAdmin.tableExists(name)) {
+            if (!hbaseAdmin.tableExists(metricsTable)) {
                 hbaseAdmin.createTable(descriptor);
             }
 
-            this._metricsTable = _hbaseConnection.getTable(schema.metricsTableInfo.getTableName());
-            this._serializer = HBaseSerializer.createSerializer(_hbaseConnection, schema);
+            this._metricsTable = hbaseConnection.getTable(metricsTable);
+            this._serializer = HBaseSerializer.createSerializer(hbaseConnection, schema);
 
         } catch (IOException e) {
             throw new MetricException("Could not connect to hbase " + e);
@@ -101,7 +96,7 @@ public class HBaseStore implements MetricStore {
     }
 
     private Configuration createHBaseConfiguration(Map config) {
-        // TODO: read from config, fix cast?
+
         Configuration conf = HBaseConfiguration.create();
 
         Object zookeeperServers = config.get(HBASE_ZK_KEY + ZOOKEEPER_SERVERS);
@@ -114,6 +109,7 @@ public class HBaseStore implements MetricStore {
         int zookeeperSessionTimeout = (int) config.get(zkPrefix + ZOOKEEPER_SESSION_TIMEOUT);
         // TODO : username/password - null
 
+        conf.set(HConstants.HBASE_DIR, hbaseRootDir);
         conf.set(HConstants.ZOOKEEPER_QUORUM, zookeeperQuorum);
         conf.set(HConstants.ZOOKEEPER_DATA_DIR, zookeeperRoot);
         conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zookeeperPort);
@@ -145,12 +141,11 @@ public class HBaseStore implements MetricStore {
     /**
      * Scans all metrics in the store
      *
-     * @param agg
-     * @return void
+     * @param agg - aggeregator
      */
     @Override
     public void scan(IAggregator agg) {
-        HashMap<String, Object> settings = new HashMap<String, Object>();
+        HashMap<String, Object> settings = new HashMap<>();
         scan(settings, agg);
     }
 
@@ -159,8 +154,7 @@ public class HBaseStore implements MetricStore {
      * Will try to search the fastest way possible
      *
      * @param settings map of settings to search by
-     * @param agg
-     * @return List<Double> metrics in store
+     * @param agg      - agg
      */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg) {
@@ -170,7 +164,7 @@ public class HBaseStore implements MetricStore {
         scanList.forEach(s -> {
 
             int numRecordsScanned = 0;
-            ResultScanner scanner = null;
+            ResultScanner scanner;
             try {
                 scanner = _metricsTable.getScanner(s);
             } catch (IOException e) {
@@ -198,7 +192,7 @@ public class HBaseStore implements MetricStore {
             return null;
         }
 
-        Set<TimeRange> matchedTimeRanges = new HashSet<TimeRange>();
+        Set<TimeRange> matchedTimeRanges = new HashSet<>();
 
         for (TimeRange timeRange : timeRangeSet) {
             Long metricTimeStamp = m.getTimeStamp();
@@ -259,11 +253,11 @@ public class HBaseStore implements MetricStore {
     }
 
     // testing only
-    public HBaseSerializer getSerializer() {
+    HBaseSerializer getSerializer() {
         return this._serializer;
     }
 
-    public Table getMetricsTable() {
+    HTableInterface getMetricsTable() {
         return this._metricsTable;
     }
 

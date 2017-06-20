@@ -18,7 +18,7 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.HConnection;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-
 
 public class HBaseSerializerCompact extends HBaseSerializer {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseSerializerCompact.class);
@@ -38,7 +37,7 @@ public class HBaseSerializerCompact extends HBaseSerializer {
     private static final int MAX_OFFSET = MIN_OFFSET + Double.BYTES;
     private static final int MAX_VALUE_SIZE = MAX_OFFSET + Double.BYTES;
 
-    public HBaseSerializerCompact(Connection hbaseConnection, HBaseSchema schema) {
+    public HBaseSerializerCompact(HConnection hbaseConnection, HBaseSchema schema) {
         super(hbaseConnection, schema);
     }
 
@@ -69,7 +68,7 @@ public class HBaseSerializerCompact extends HBaseSerializer {
         bb.get(value, 0, bbLen);
 
         Put p = new Put(key, timestamp);
-        p.addColumn(columnFamily, column, value);
+        p.add(columnFamily, column, value);
 
         return p;
     }

@@ -18,24 +18,28 @@
 package org.apache.storm.metrics2.store;
 
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HBaseTestingUtility;
+import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.client.HTableInterface;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.storm.generated.Window;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
 import java.util.*;
 
-import org.apache.hadoop.hbase.*;
-import org.apache.storm.generated.Window;
-import org.junit.*;
-
 import static org.junit.Assert.*;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.client.*;
-import org.apache.storm.utils.Time;
-import org.apache.hadoop.hbase.HBaseTestingUtility;
 
 public class HBaseStoreTest {
 
     // manual parameters
     private final static String DEFAULT_ZK_PREFIX = "storm.metrics2.store.HBaseStore.zookeeper";
-    private final static String SCHEMA_TYPE = "compact";
+    private final static String SCHEMA_TYPE = "expanded";
 
     private final static String HBASE_ROOT_DIR = "/tmp/hbase";
     private final static String ZOOKEEPER_ROOT = "/storm";
@@ -45,7 +49,7 @@ public class HBaseStoreTest {
 
     private static HBaseStore store;
     private static HBaseTestingUtility testUtil;
-    private static Table metricsTable;
+    private static HTableInterface metricsTable;
     private static Random random = new Random();
 
     private static HashMap<String, Object> makeConfig() {

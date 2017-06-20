@@ -33,7 +33,7 @@
         <worker-launcher.conf.dir>/etc/storm</worker-launcher.conf.dir>
         <worker-launcher.additional_cflags></worker-launcher.additional_cflags>
         <argLine></argLine>
-        <hbase.version>1.1.0</hbase.version>
+        <hbase.version>0.98.4-hadoop2</hbase.version>
         <hdfs.version>${hadoop.version}</hdfs.version>
     </properties>
 
