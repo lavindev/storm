@@ -18,7 +18,6 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.storm.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,9 +46,9 @@ public class HBaseBench {
         this.idPrefix = idPrefix;
         this.random = new Random();
         this.store = store;
-        this.writeTimer = new HashMap<Integer, ArrayList<Integer>>(rounds);
-        this.aggWriteTimer = new HashMap<Integer, ArrayList<Integer>>(rounds);
-        this.scanTimer = new HashMap<Integer, ArrayList<Integer>>(rounds);
+        this.writeTimer = new HashMap<>(rounds);
+        this.aggWriteTimer = new HashMap<>(rounds);
+        this.scanTimer = new HashMap<>(rounds);
     }
 
     public HBaseBench withMetricNames(List<String> metrics) {
@@ -88,9 +87,9 @@ public class HBaseBench {
         LOG.info("Running for node with id = {}", idPrefix);
 
         for (int i = 0; i < rounds; ++i) {
-            writeTimer.put(i, new ArrayList<Integer>(writeCount));
-            aggWriteTimer.put(i, new ArrayList<Integer>(writeCount));
-            scanTimer.put(i, new ArrayList<Integer>(scanCount));
+            writeTimer.put(i, new ArrayList<>(writeCount));
+            aggWriteTimer.put(i, new ArrayList<>(writeCount));
+            scanTimer.put(i, new ArrayList<>(scanCount));
             insert(i);
             scan(i);
             LOG.info("Round {} complete for {}", i, idPrefix);
@@ -114,7 +113,6 @@ public class HBaseBench {
             writeTimer.get(round).add(duration);
         }
 
-
         for (int i = 0; i <= writeCount; ++i) {
             long startTime = timeNow();
             for (String metricName : metricNames) {
@@ -134,9 +132,7 @@ public class HBaseBench {
         for (int i = 0; i <= scanCount; ++i) {
 
             long startTime = timeNow();
-            store.scan(settings, (metric, timeRange) -> {
-                metricsRetrieved.add(metric);
-            });
+            store.scan(settings, (metric, timeRange) -> metricsRetrieved.add(metric));
             long endTime = timeNow();
             int duration = (int) (endTime - startTime);
             scanTimer.get(round).add(duration);
