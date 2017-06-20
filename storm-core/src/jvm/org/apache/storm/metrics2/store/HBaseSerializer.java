@@ -19,7 +19,7 @@ package org.apache.storm.metrics2.store;
 
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -32,7 +32,7 @@ import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-import static org.apache.storm.metrics2.store.HBaseSerializer.MetaDataIndex.*;
+import static org.apache.storm.metrics2.store.HBaseMetadataIndex.*;
 
 public abstract class HBaseSerializer {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseSerializer.class);
@@ -40,69 +40,47 @@ public abstract class HBaseSerializer {
     private class MetaData {
         public HashMap<String, Integer> map;
         public HashMap<Integer, String> rmap;
-        public Table table;
+        public HTableInterface table;
     }
 
-    public enum MetaDataIndex {
-        TOPOLOGY(0),
-        STREAM(1),
-        HOST(2),
-        COMP(3),
-        METRICNAME(4),
-        EXECUTOR(5);
 
-        private int _index;
-
-        MetaDataIndex(int index) {
-            this._index = index;
-        }
-
-        public int index() {
-            return _index;
-        }
-
-        public static int count() {
-            return MetaDataIndex.values().length;
-        }
-    }
-
-    protected Connection _hbaseConnection;
+    protected HConnection _hbaseConnection;
     protected HBaseSchema _schema;
 
     private MetaData[] metaData;
 
-    public static HBaseSerializer createSerializer(Connection hbaseConnection, HBaseSchema schema)
+    public static HBaseSerializer createSerializer(HConnection hbaseConnection, HBaseSchema schema)
             throws MetricException {
 
         HBaseSchemaType type = schema.getSchemaType();
         try {
             Class<?> clazz = Class.forName(type.getClassName());
-            Constructor<?> ctor = clazz.getConstructor(Connection.class, HBaseSchema.class);
+            Constructor<?> ctor = clazz.getConstructor(HConnection.class, HBaseSchema.class);
             return (HBaseSerializer) ctor.newInstance(hbaseConnection, schema);
         } catch (Exception e) {
             throw new MetricException("Could not initialize serializer - " + e);
         }
     }
 
-    public HBaseSerializer(Connection hbaseConnection, HBaseSchema schema) {
+    public HBaseSerializer(HConnection hbaseConnection, HBaseSchema schema) {
 
         // TODO: fix configuration lookup
         this._hbaseConnection = hbaseConnection;
         Configuration conf = hbaseConnection.getConfiguration();
         this._schema = schema;
-        this.metaData = new MetaData[MetaDataIndex.count()];
+        this.metaData = new MetaData[HBaseMetadataIndex.count()];
 
-        for (MetaDataIndex index : MetaDataIndex.values()) {
+        for (HBaseMetadataIndex index : HBaseMetadataIndex.values()) {
             assignMetaDataTable(index);
             initializeMap(index);
         }
 
     }
 
-    private void assignMetaDataTable(MetaDataIndex index) {
-        int i = index.ordinal();
+    private void assignMetaDataTable(HBaseMetadataIndex meta) {
+        int i = meta.getIndex();
         try {
-            Admin hbaseAdmin = _hbaseConnection.getAdmin();
+            HBaseAdmin hbaseAdmin = new HBaseAdmin(_hbaseConnection);
             HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
             TableName name = info.getTableName();
 
@@ -118,7 +96,7 @@ public abstract class HBaseSerializer {
             byte[] cf = info.getColumnFamily();
             byte[] column = info.getColumn();
             Put p = new Put(refcounter);
-            p.addColumn(cf, column, value);
+            p.add(cf, column, value);
             metaData[i].table.checkAndPut(refcounter, cf, column, null, p);
 
         } catch (IOException e) {
@@ -126,8 +104,8 @@ public abstract class HBaseSerializer {
         }
     }
 
-    private void initializeMap(MetaDataIndex index) {
-        int i = index.ordinal();
+    private void initializeMap(HBaseMetadataIndex meta) {
+        int i = meta.getIndex();
         if (metaData[i].map == null)
             metaData[i].map = new HashMap<String, Integer>();
         if (metaData[i].rmap == null)
@@ -160,9 +138,9 @@ public abstract class HBaseSerializer {
         }
     }
 
-    private Integer checkExistingMapping(String keyStr, MetaDataIndex metaIndex) {
+    private Integer checkExistingMapping(String keyStr, HBaseMetadataIndex metaIndex) {
 
-        int i = metaIndex.ordinal();
+        int i = metaIndex.getIndex();
         MetaData meta = metaData[i];
         HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
 
@@ -186,9 +164,9 @@ public abstract class HBaseSerializer {
         return null;
     }
 
-    private Integer insertNewMapping(String keyStr, MetaDataIndex metaIndex) {
+    private Integer insertNewMapping(String keyStr, HBaseMetadataIndex metaIndex) {
 
-        int i = metaIndex.ordinal();
+        int i = metaIndex.getIndex();
         MetaData meta = metaData[i];
         HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
 
@@ -215,7 +193,7 @@ public abstract class HBaseSerializer {
         // get ref counter
         Integer counter;
         Increment inc = new Increment(refcounter);
-        inc.setReturnResults(true);
+        //inc.setReturnResults(true);
 
         try {
             counter = (int) meta.table.incrementColumnValue(refcounter, columnFamily, column, 1);
@@ -228,7 +206,7 @@ public abstract class HBaseSerializer {
         try {
             Put p = new Put(key);
             byte[] value = Bytes.toBytes(counter);
-            p.addColumn(columnFamily, column, value);
+            p.add(columnFamily, column, value);
             meta.table.put(p);
         } catch (IOException e) {
             LOG.error("Could not create mapping");
@@ -239,9 +217,9 @@ public abstract class HBaseSerializer {
 
     }
 
-    private Integer getRef(MetaDataIndex metaIndex, String key) {
+    private Integer getRef(HBaseMetadataIndex metaIndex, String key) {
 
-        int i = metaIndex.ordinal();
+        int i = metaIndex.getIndex();
         MetaData meta = metaData[i];
 
         Integer ref = meta.map.get(key);
@@ -257,9 +235,9 @@ public abstract class HBaseSerializer {
         return ref;
     }
 
-    private String getReverseRef(MetaDataIndex metaIndex, Integer ref) {
+    private String getReverseRef(HBaseMetadataIndex metaIndex, Integer ref) {
 
-        int i = metaIndex.ordinal();
+        int i = metaIndex.getIndex();
         MetaData meta = metaData[i];
 
         if (!meta.rmap.containsKey(ref) && ref != null) {
@@ -416,13 +394,13 @@ public abstract class HBaseSerializer {
         private HashSet<Integer> metricIds;
         private Set<TimeRange> timeRangeSet;
 
-        public HBaseStoreScan() {
+        HBaseStoreScan() {
             pre = ByteBuffer.allocate(PRE_LENGTH);
             post = ByteBuffer.allocate(POST_LENGTH);
             prefixLength = 0;
         }
 
-        public HBaseStoreScan withAggLevel(Integer aggLevel) {
+        HBaseStoreScan withAggLevel(Integer aggLevel) {
             if (aggLevel != null) {
                 pre.put(aggLevel.byteValue());
                 prefixLength = 1;
@@ -430,7 +408,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withTopoId(Integer topoId) {
+        HBaseStoreScan withTopoId(Integer topoId) {
             if (topoId != null) {
                 pre.putInt(topoId);
                 prefixLength = 5;
@@ -438,7 +416,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withTimeRange(Set<TimeRange> timeRangeSet) {
+        HBaseStoreScan withTimeRange(Set<TimeRange> timeRangeSet) {
             if (timeRangeSet != null) {
                 this.timeRangeSet = timeRangeSet;
 
@@ -454,7 +432,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withMetricSet(HashSet<Integer> metricIds) {
+        HBaseStoreScan withMetricSet(HashSet<Integer> metricIds) {
             if (metricIds != null && !metricIds.isEmpty()) {
                 this.metricIds = metricIds;
                 prefixLength = 9;
@@ -462,7 +440,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withCompId(Integer compId) {
+        HBaseStoreScan withCompId(Integer compId) {
             if (compId != null) {
                 post.putInt(compId);
                 prefixLength = 13;
@@ -470,7 +448,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withExecutorId(Integer executorId) {
+        HBaseStoreScan withExecutorId(Integer executorId) {
             if (executorId != null) {
                 post.putInt(executorId);
                 prefixLength = 17;
@@ -478,7 +456,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withHostId(Integer hostId) {
+        HBaseStoreScan withHostId(Integer hostId) {
             if (hostId != null) {
                 post.putInt(hostId);
                 prefixLength = 21;
@@ -486,7 +464,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withPort(Long port) {
+        HBaseStoreScan withPort(Long port) {
             if (port != null) {
                 post.putLong(port);
                 prefixLength = 29;
@@ -494,7 +472,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public HBaseStoreScan withStreamId(Integer streamId) {
+        HBaseStoreScan withStreamId(Integer streamId) {
             if (streamId != null) {
                 post.putInt(streamId);
                 prefixLength = 33;
@@ -502,7 +480,7 @@ public abstract class HBaseSerializer {
             return this;
         }
 
-        public List<Scan> getScanList() {
+        List<Scan> getScanList() {
             if (scanList == null)
                 generateScanList();
             return scanList;
@@ -510,7 +488,7 @@ public abstract class HBaseSerializer {
 
         private void generateScanList() {
 
-            scanList = new ArrayList<Scan>();
+            scanList = new ArrayList<>();
 
             // create buffer without metricId
             byte[] prefixArray = new byte[prefixLength];
@@ -542,7 +520,7 @@ public abstract class HBaseSerializer {
         private void createNewScans(byte[] prefix) {
 
             Scan s = new Scan();
-            s.setRowPrefixFilter(prefix);
+            setRowPrefixFilter(s, prefix);
 
             if (timeRangeSet != null) {
 
@@ -572,6 +550,42 @@ public abstract class HBaseSerializer {
             }
 
 
+        }
+
+        /* from newer hbase */
+        private void setRowPrefixFilter(Scan s, byte[] rowPrefix) {
+            if (rowPrefix == null) {
+                s.setStartRow(HConstants.EMPTY_START_ROW);
+                s.setStopRow(HConstants.EMPTY_END_ROW);
+            } else {
+                s.setStartRow(rowPrefix);
+                s.setStopRow(calculateTheClosestNextRowKeyForPrefix(rowPrefix));
+            }
+        }
+
+        private byte[] calculateTheClosestNextRowKeyForPrefix(byte[] rowKeyPrefix) {
+            // Essentially we are treating it like an 'unsigned very very long' and doing +1 manually.
+            // Search for the place where the trailing 0xFFs start
+            int offset = rowKeyPrefix.length;
+            while (offset > 0) {
+                if (rowKeyPrefix[offset - 1] != (byte) 0xFF) {
+                    break;
+                }
+                offset--;
+            }
+
+            if (offset == 0) {
+                // We got an 0xFFFF... (only FFs) stopRow value which is
+                // the last possible prefix before the end of the table.
+                // So set it to stop at the 'end of the table'
+                return HConstants.EMPTY_END_ROW;
+            }
+
+            // Copy the right length of the original
+            byte[] newStopRow = Arrays.copyOfRange(rowKeyPrefix, 0, offset);
+            // And increment the last one
+            newStopRow[newStopRow.length - 1]++;
+            return newStopRow;
         }
 
     }

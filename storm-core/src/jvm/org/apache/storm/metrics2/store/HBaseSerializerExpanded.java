@@ -18,26 +18,17 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.HConnection;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.storm.generated.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.*;
-
-import static org.apache.storm.metrics2.store.HBaseSerializer.MetaDataIndex.*;
-
 
 public class HBaseSerializerExpanded extends HBaseSerializer {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseSerializerExpanded.class);
 
-    public HBaseSerializerExpanded(Connection hbaseConnection, HBaseSchema schema){
+    public HBaseSerializerExpanded(HConnection hbaseConnection, HBaseSchema schema) {
         super(hbaseConnection, schema);
     }
 
@@ -55,17 +46,17 @@ public class HBaseSerializerExpanded extends HBaseSerializer {
 
         Put p = new Put(key, timestamp);
 
-        p.addColumn(columnFamily, info.getValueColumn(), value);
-        p.addColumn(columnFamily, info.getCountColumn(), count);
+        p.add(columnFamily, info.getValueColumn(), value);
+        p.add(columnFamily, info.getCountColumn(), count);
 
         if (isAggregate) {
             byte[] sum = Bytes.toBytes(m.getSum());
             byte[] min = Bytes.toBytes(m.getMin());
             byte[] max = Bytes.toBytes(m.getMax());
 
-            p.addColumn(columnFamily, info.getSumColumn(), sum);
-            p.addColumn(columnFamily, info.getMinColumn(), min);
-            p.addColumn(columnFamily, info.getMaxColumn(), max);
+            p.add(columnFamily, info.getSumColumn(), sum);
+            p.add(columnFamily, info.getMinColumn(), min);
+            p.add(columnFamily, info.getMaxColumn(), max);
         }
 
         return p;
