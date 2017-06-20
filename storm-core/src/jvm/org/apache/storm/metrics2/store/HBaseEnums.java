@@ -1,5 +1,8 @@
 package org.apache.storm.metrics2.store;
 
+/**
+ * @see HBaseSerializer
+ */
 enum HBaseSchemaType {
     COMPACT("compact", "org.apache.storm.metrics2.store.HBaseSerializerCompact"),
     EXPANDED("expanded", "org.apache.storm.metrics2.store.HBaseSerializerExpanded");
@@ -25,6 +28,7 @@ enum HBaseSchemaType {
     }
 
 }
+
 
 enum HBaseMetadataIndex {
 

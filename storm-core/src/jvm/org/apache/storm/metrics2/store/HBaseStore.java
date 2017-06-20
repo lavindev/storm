@@ -43,6 +43,7 @@ public class HBaseStore implements MetricStore {
      * using the configurations provided via the config map
      *
      * @param config Storm config map
+     * @throws MetricException On config validation failure or connection error
      */
     @Override
     public void prepare(Map config) throws MetricException {
@@ -70,8 +71,14 @@ public class HBaseStore implements MetricStore {
         }
     }
 
+    /**
+     * Validate HBase and HBase related ZooKeeper config
+     *
+     * @param config Storm config map
+     * @throws MetricException On config validation failure
+     * @see HBaseSchema for schema validation
+     */
     private void validateConfig(Map config) throws MetricException {
-        // TODO: add rest of validation
 
         if (!config.containsKey(HBASE_ROOT_DIR)) {
             throw new MetricException("Need HBase root dir");
@@ -95,6 +102,12 @@ public class HBaseStore implements MetricStore {
 
     }
 
+    /**
+     * Create HBase configuration
+     *
+     * @param config Storm config map
+     * @return HBase configuration
+     */
     private Configuration createHBaseConfiguration(Map config) {
 
         Configuration conf = HBaseConfiguration.create();
@@ -124,7 +137,7 @@ public class HBaseStore implements MetricStore {
 
 
     /**
-     * Stores metrics in the store
+     * Inserts metric in store
      *
      * @param m Metric to store
      */
@@ -141,7 +154,8 @@ public class HBaseStore implements MetricStore {
     /**
      * Scans all metrics in the store
      *
-     * @param agg - aggeregator
+     * @param agg - Metric, TimeRange pair
+     * @see IAggregator
      */
     @Override
     public void scan(IAggregator agg) {
@@ -150,11 +164,11 @@ public class HBaseStore implements MetricStore {
     }
 
     /**
-     * Implements scan method of the Metrics Store, scans all metrics with settings in the store
-     * Will try to search the fastest way possible
+     * Scan metric store with filters
      *
      * @param settings map of settings to search by
-     * @param agg      - agg
+     * @param agg      Metric, TimeRange pair
+     * @see IAggregator
      */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg) {
@@ -184,6 +198,13 @@ public class HBaseStore implements MetricStore {
         });
     }
 
+    /**
+     * Find time ranges from metric that match specified settings
+     *
+     * @param m        metric to read time ranges from
+     * @param settings map that contains time range set
+     * @return set which contains matched time ranges
+     */
     private Set<TimeRange> getTimeRanges(Metric m, HashMap<String, Object> settings) {
 
         Set<TimeRange> timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
@@ -203,7 +224,12 @@ public class HBaseStore implements MetricStore {
         return matchedTimeRanges;
     }
 
-
+    /**
+     * Populate metric from store that matches given key
+     *
+     * @param metric metric with key specified
+     * @return whether metric was found or not
+     */
     @Override
     public boolean populateValue(Metric metric) {
 
@@ -227,6 +253,11 @@ public class HBaseStore implements MetricStore {
 
     }
 
+    /**
+     * Deletes metrics from store
+     *
+     * @param settings map of settings to filter by
+     */
     @Override
     public void remove(HashMap<String, Object> settings) {
 

@@ -154,7 +154,7 @@ public class HBaseSchema {
 
         createMetricsDescriptor(metricsMap);
 
-        this.metadataTableInfos = new MetadataTableInfo[6];
+        this.metadataTableInfos = new MetadataTableInfo[HBaseMetadataIndex.count()];
         metadataMap.forEach((metadataType, map) -> {
             HashMap<String, String> tableMap = (HashMap<String, String>) map;
             createMetadataDescriptor(metadataType, tableMap);

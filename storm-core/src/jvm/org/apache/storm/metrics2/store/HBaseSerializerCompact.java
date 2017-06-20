@@ -41,6 +41,13 @@ public class HBaseSerializerCompact extends HBaseSerializer {
         super(hbaseConnection, schema);
     }
 
+    /**
+     * Create HBase Put operation from metric
+     *
+     * @param m Metric to insert
+     * @return Put operation
+     * @throws MetricException On key creation failure
+     */
     public Put createPutOperation(Metric m) throws MetricException {
 
         HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
@@ -73,6 +80,13 @@ public class HBaseSerializerCompact extends HBaseSerializer {
         return p;
     }
 
+    /**
+     * Populate metric values from HBase result
+     *
+     * @param m      metric to populate
+     * @param result result from get or scan
+     * @return whether metric was populated or not
+     */
     public boolean populateMetricValue(Metric m, Result result) {
 
         HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
