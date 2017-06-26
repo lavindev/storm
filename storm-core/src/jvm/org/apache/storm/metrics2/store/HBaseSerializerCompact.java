@@ -54,10 +54,10 @@ public class HBaseSerializerCompact extends HBaseSerializer {
 
         boolean isAggregate = m.getCount() > 1;
 
-        long timestamp = m.getTimeStamp();
-        byte[] key = createKey(m);
+        long   timestamp    = m.getTimeStamp();
+        byte[] key          = createKey(m);
         byte[] columnFamily = info.getColumnFamily();
-        byte[] column = info.getValueColumn();
+        byte[] column       = info.getValueColumn();
 
         ByteBuffer bb = ByteBuffer.allocate(MAX_VALUE_SIZE);
 
@@ -69,7 +69,7 @@ public class HBaseSerializerCompact extends HBaseSerializer {
             bb.putDouble(m.getMax());
         }
 
-        int bbLen = bb.position();
+        int    bbLen = bb.position();
         byte[] value = new byte[bbLen];
         bb.rewind();
         bb.get(value, 0, bbLen);
@@ -89,13 +89,13 @@ public class HBaseSerializerCompact extends HBaseSerializer {
      */
     public boolean populateMetricValue(Metric m, Result result) {
 
-        HBaseSchema.MetricsTableInfo info = _schema.metricsTableInfo;
-        byte[] cf = info.getColumnFamily();
-        byte[] valueBytes = result.getValue(cf, info.getValueColumn());
+        HBaseSchema.MetricsTableInfo info       = _schema.metricsTableInfo;
+        byte[]                       cf         = info.getColumnFamily();
+        byte[]                       valueBytes = result.getValue(cf, info.getValueColumn());
 
         try {
             double value = Bytes.toDouble(valueBytes, VALUE_OFFSET);
-            long count = Bytes.toLong(valueBytes, COUNT_OFFSET);
+            long   count = Bytes.toLong(valueBytes, COUNT_OFFSET);
 
             m.setValue(value);
             m.setCount(count);

@@ -3,6 +3,7 @@ package org.apache.storm.metrics2.store;
 class ConfigKeywords {
 
     final static String BASE_CONFIG_KEY = "storm.metrics2.store.HBaseStore";
+
     final static String HBASE_ZK_KEY = BASE_CONFIG_KEY + ".zookeeper";
     final static String STORM_ZK_KEY = "storm.zookeeper";
 

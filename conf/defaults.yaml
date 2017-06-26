@@ -27,7 +27,7 @@ storm.log4j2.conf.dir: "log4j2"
 storm.zookeeper.servers:
     - "localhost"
 storm.zookeeper.port: 2181
-storm.zookeeper.root: "/storm"
+storm.zookeeper.root: "/homes/ldevnani/rootstorm"
 storm.zookeeper.session.timeout: 20000
 storm.zookeeper.connection.timeout: 15000
 storm.zookeeper.retry.times: 5
@@ -295,105 +295,50 @@ storm.daemon.metrics.reporter.plugins:
 #storm.metrics2.store.rocksdb.retention.units: "MINUTES"
 
 storm.metrics2.store.class: "org.apache.storm.metrics2.store.HBaseStore"
-storm.metrics2.store.HBaseStore.zookeeper.servers:
-    - "localhost"
-storm.metrics2.store.HBaseStore.zookeeper.port: 2181
-storm.metrics2.store.HBaseStore.zookeeper.root: "/storm"
-storm.metrics2.store.HBaseStore.zookeeper.session.timeout: 20000
-storm.metrics2.store.HBaseStore.retention: 1
-storm.metrics2.store.HBaseStore.retention.units: "MINUTES"
-storm.metrics2.store.HBaseStore.hbase.root_dir: "/tmp/hbase"
 storm.metrics2.store.HBaseStore.hbase.schema:
     type: "compact"
-#    metrics:
-#        namespace: "storm_dev"
-#        name: "metrics"
-#        cf: "c"
-#        columns:
-#            value: "v"
-#            sum: "s"
-#            count: "c"
-#            min: "i"
-#            max: "a"
     metrics:
         namespace: "storm_dev"
         name: "metrics"
         cf: "c"
         column: "c"
-#    metadata:
-#        topoMap:
-#            namespace: "storm_dev"
-#            name: "topoMap"
-#            cf: "c"
-#            column: "c"
-#            refcounter: "REFCOUNTER"
-#        streamMap:
-#            namespace: "storm_dev"
-#            name: "streamMap"
-#            cf: "c"
-#            column: "c"
-#            refcounter: "REFCOUNTER"
-#        hostMap:
-#            namespace: "storm_dev"
-#            name: "hostMap"
-#            cf: "c"
-#            column: "c"
-#            refcounter: "REFCOUNTER"
-#        compMap:
-#            namespace: "storm_dev"
-#            name: "compMap"
-#            cf: "c"
-#            column: "c"
-#            refcounter: "REFCOUNTER"
-#        metricMap:
-#            namespace: "storm_dev"
-#            name: "metricMap"
-#            cf: "c"
-#            column: "c"
-#            refcounter: "REFCOUNTER"
-#        executorMap:
-#            namespace: "storm_dev"
-#            name: "executorMap"
-#            cf: "c"
-#            column: "c"
-#            refcounter: "REFCOUNTER"
     metadata:
         topoMap:
             namespace: "storm_dev"
-            name: "metrics"
-            cf: "c"
-            column: "topo"
-            refcounter: "REFCOUNTERtopo"
+            name: "topoMap"
+            cf: "m"
+            column: "t"
+            refcounter: "REFCOUNTER"
         streamMap:
             namespace: "storm_dev"
-            name: "metrics"
-            cf: "c"
-            column: "stream"
-            refcounter: "REFCOUNTERstream"
+            name: "streamMap"
+            cf: "m"
+            column: "s"
+            refcounter: "REFCOUNTER"
         hostMap:
             namespace: "storm_dev"
-            name: "metrics"
-            cf: "c"
-            column: "host"
-            refcounter: "REFCOUNTERhost"
+            name: "hostMap"
+            cf: "m"
+            column: "h"
+            refcounter: "REFCOUNTER"
         compMap:
             namespace: "storm_dev"
-            name: "metrics"
-            cf: "c"
-            column: "comp"
-            refcounter: "REFCOUNTERcomp"
+            name: "compMap"
+            cf: "m"
+            column: "c"
+            refcounter: "REFCOUNTER"
         metricMap:
             namespace: "storm_dev"
-            name: "metrics"
-            cf: "c"
-            column: "metric"
-            refcounter: "REFCOUNTERmetric"
+            name: "metricMap"
+            cf: "m"
+            column: "m"
+            refcounter: "REFCOUNTER"
         executorMap:
             namespace: "storm_dev"
-            name: "metrics"
-            cf: "c"
-            column: "executor"
-            refcounter: "REFCOUNTERexecutor"
+            name: "executorMap"
+            cf: "m"
+            column: "e"
+            refcounter: "REFCOUNTER"
 
 
 storm.metrics.reporters:

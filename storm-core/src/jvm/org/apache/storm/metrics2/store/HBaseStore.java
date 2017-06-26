@@ -20,7 +20,6 @@ package org.apache.storm.metrics2.store;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
@@ -29,8 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
-
-import static org.apache.storm.metrics2.store.ConfigKeywords.*;
 
 public class HBaseStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseStore.class);
@@ -48,93 +45,26 @@ public class HBaseStore implements MetricStore {
     @Override
     public void prepare(Map config) throws MetricException {
 
-        validateConfig(config);
-
-        HBaseSchema schema = new HBaseSchema(config);
-        Configuration hbaseConf = createHBaseConfiguration(config);
+        HBaseSchema   schema    = new HBaseSchema(config);
+        Configuration hbaseConf = HBaseConfiguration.create();
 
         try {
-            HConnection hbaseConnection = HConnectionManager.createConnection(hbaseConf);
-            HBaseAdmin hbaseAdmin = new HBaseAdmin(hbaseConnection);
-            HTableDescriptor descriptor = schema.metricsTableInfo.getDescriptor();
-            TableName metricsTable = schema.metricsTableInfo.getTableName();
+            HConnection      hbaseConnection = HConnectionManager.createConnection(hbaseConf);
+            HBaseAdmin       hbaseAdmin      = new HBaseAdmin(hbaseConf);
+            HTableDescriptor descriptor      = schema.metricsTableInfo.getDescriptor();
+            TableName        metricsTable    = schema.metricsTableInfo.getTableName();
 
             if (!hbaseAdmin.tableExists(metricsTable)) {
                 hbaseAdmin.createTable(descriptor);
+                LOG.info("Table {} created", metricsTable.getNameAsString());
             }
 
             this._metricsTable = hbaseConnection.getTable(metricsTable);
             this._serializer = HBaseSerializer.createSerializer(hbaseConnection, schema);
-
         } catch (IOException e) {
             throw new MetricException("Could not connect to hbase " + e);
         }
     }
-
-    /**
-     * Validate HBase and HBase related ZooKeeper config
-     *
-     * @param config Storm config map
-     * @throws MetricException On config validation failure
-     * @see HBaseSchema for schema validation
-     */
-    private void validateConfig(Map config) throws MetricException {
-
-        if (!config.containsKey(HBASE_ROOT_DIR)) {
-            throw new MetricException("Need HBase root dir");
-        }
-
-        String zkPrefix = null;
-        if (config.containsKey(HBASE_ZK_KEY + ZOOKEEPER_SERVERS)) {
-            zkPrefix = HBASE_ZK_KEY;
-        } else if (config.containsKey(STORM_ZK_KEY + ZOOKEEPER_SERVERS)) {
-            zkPrefix = STORM_ZK_KEY;
-        }
-
-        if (zkPrefix == null)
-            throw new MetricException("Need either hbase or storm ZK servers");
-
-        if (!config.containsKey(zkPrefix + ZOOKEEPER_PORT) ||
-                !config.containsKey(zkPrefix + ZOOKEEPER_ROOT) ||
-                !config.containsKey(zkPrefix + ZOOKEEPER_SESSION_TIMEOUT)) {
-            throw new MetricException("Need ZK port/root/session timeout.");
-        }
-
-    }
-
-    /**
-     * Create HBase configuration
-     *
-     * @param config Storm config map
-     * @return HBase configuration
-     */
-    private Configuration createHBaseConfiguration(Map config) {
-
-        Configuration conf = HBaseConfiguration.create();
-
-        Object zookeeperServers = config.get(HBASE_ZK_KEY + ZOOKEEPER_SERVERS);
-        String zkPrefix = (zookeeperServers == null) ? STORM_ZK_KEY : HBASE_ZK_KEY;
-
-        String hbaseRootDir = (String) config.get(HBASE_ROOT_DIR);
-        String zookeeperQuorum = String.join(";", (List) config.get(zkPrefix + ZOOKEEPER_SERVERS));
-        String zookeeperRoot = (String) config.get(zkPrefix + ZOOKEEPER_ROOT);
-        int zookeeperPort = (int) config.get(zkPrefix + ZOOKEEPER_PORT);
-        int zookeeperSessionTimeout = (int) config.get(zkPrefix + ZOOKEEPER_SESSION_TIMEOUT);
-        // TODO : username/password - null
-
-        conf.set(HConstants.HBASE_DIR, hbaseRootDir);
-        conf.set(HConstants.ZOOKEEPER_QUORUM, zookeeperQuorum);
-        conf.set(HConstants.ZOOKEEPER_DATA_DIR, zookeeperRoot);
-        conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zookeeperPort);
-        conf.setInt(HConstants.ZK_SESSION_TIMEOUT, zookeeperSessionTimeout);
-
-        // security
-        //conf.set("hbase.security.authentication", "kerberos");
-        //conf.set("hbase.rpc.protection", "privacy");
-
-        return conf;
-    }
-
 
     /**
      * Inserts metric in store
@@ -177,7 +107,7 @@ public class HBaseStore implements MetricStore {
 
         scanList.forEach(s -> {
 
-            int numRecordsScanned = 0;
+            int           numRecordsScanned = 0;
             ResultScanner scanner;
             try {
                 scanner = _metricsTable.getScanner(s);
@@ -188,7 +118,7 @@ public class HBaseStore implements MetricStore {
 
             for (Result result : scanner) {
                 ++numRecordsScanned;
-                Metric metric = _serializer.deserializeMetric(result);
+                Metric         metric     = _serializer.deserializeMetric(result);
                 Set<TimeRange> timeRanges = getTimeRanges(metric, settings);
 
                 agg.agg(metric, timeRanges);
@@ -243,7 +173,7 @@ public class HBaseStore implements MetricStore {
         }
 
         try {
-            Get g = new Get(key);
+            Get    g      = new Get(key);
             Result result = _metricsTable.get(g);
             return _serializer.populateMetricValue(metric, result);
         } catch (IOException e) {
@@ -266,7 +196,7 @@ public class HBaseStore implements MetricStore {
         scan(settings, (metric, timeRanges) -> {
             try {
                 byte[] key = _serializer.createKey(metric);
-                Delete d = new Delete(key);
+                Delete d   = new Delete(key);
                 metricsToRemove.add(d);
             } catch (MetricException e) {
                 LOG.error("Could not create key ", e);

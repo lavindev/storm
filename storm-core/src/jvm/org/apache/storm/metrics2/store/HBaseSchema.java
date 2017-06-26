@@ -147,8 +147,8 @@ public class HBaseSchema {
 
         validateSchema(conf);
 
-        HashMap<String, Object> schemaMap = (HashMap<String, Object>) conf.get(SCHEMA_KEY);
-        HashMap<String, Object> metricsMap = (HashMap<String, Object>) schemaMap.get("metrics");
+        HashMap<String, Object> schemaMap   = (HashMap<String, Object>) conf.get(SCHEMA_KEY);
+        HashMap<String, Object> metricsMap  = (HashMap<String, Object>) schemaMap.get("metrics");
         HashMap<String, Object> metadataMap = (HashMap<String, Object>) schemaMap.get("metadata");
 
         String schemaTypeStr = (String) schemaMap.get("type");
@@ -170,8 +170,8 @@ public class HBaseSchema {
 
     private void createMetricsDescriptor(Map metricsMap) {
 
-        String namespace = (String) metricsMap.get("namespace");
-        String name = (String) metricsMap.get("name");
+        String namespace    = (String) metricsMap.get("namespace");
+        String name         = (String) metricsMap.get("name");
         String columnFamily = (String) metricsMap.get("cf");
 
         if (schemaType == HBaseSchemaType.COMPACT) {
@@ -183,12 +183,12 @@ public class HBaseSchema {
 
         } else if (schemaType == HBaseSchemaType.EXPANDED) {
 
-            HashMap<String, String> columnMap = (HashMap<String, String>) metricsMap.get("columns");
-            String valueColumn = columnMap.get("value");
-            String sumColumn = columnMap.get("sum");
-            String countColumn = columnMap.get("count");
-            String minColumn = columnMap.get("min");
-            String maxColumn = columnMap.get("max");
+            HashMap<String, String> columnMap   = (HashMap<String, String>) metricsMap.get("columns");
+            String                  valueColumn = columnMap.get("value");
+            String                  sumColumn   = columnMap.get("sum");
+            String                  countColumn = columnMap.get("count");
+            String                  minColumn   = columnMap.get("min");
+            String                  maxColumn   = columnMap.get("max");
 
             this.metricsTableInfo = new MetricsTableInfo(namespace, name, columnFamily, valueColumn, sumColumn,
                     countColumn, minColumn, maxColumn);
@@ -198,14 +198,14 @@ public class HBaseSchema {
 
     private void createMetadataDescriptor(String metadataType, HashMap<String, String> tableMap) {
 
-        String namespace = tableMap.get("namespace");
-        String name = tableMap.get("name");
+        String namespace    = tableMap.get("namespace");
+        String name         = tableMap.get("name");
         String columnFamily = tableMap.get("cf");
-        String column = tableMap.get("column");
-        String refcounter = tableMap.get("refcounter");
+        String column       = tableMap.get("column");
+        String refcounter   = tableMap.get("refcounter");
 
-        MetadataTableInfo info = new MetadataTableInfo(namespace, name, columnFamily, column, refcounter);
-        int index = HBaseMetadataIndex.indexFromMapping(metadataType);
+        MetadataTableInfo info  = new MetadataTableInfo(namespace, name, columnFamily, column, refcounter);
+        int               index = HBaseMetadataIndex.indexFromMapping(metadataType);
         metadataTableInfos[index] = info;
 
     }
@@ -218,9 +218,9 @@ public class HBaseSchema {
             throw new MetricException("No schema specified");
 
 
-        String schemaTypeStr = (String) schemaMap.get("type");
-        HashMap<String, Object> metricsMap = (HashMap<String, Object>) schemaMap.get("metrics");
-        HashMap<String, Object> metadataMap = (HashMap<String, Object>) schemaMap.get("metadata");
+        String                  schemaTypeStr = (String) schemaMap.get("type");
+        HashMap<String, Object> metricsMap    = (HashMap<String, Object>) schemaMap.get("metrics");
+        HashMap<String, Object> metadataMap   = (HashMap<String, Object>) schemaMap.get("metadata");
 
         if (schemaTypeStr == null)
             throw new MetricException("No schema type specified");

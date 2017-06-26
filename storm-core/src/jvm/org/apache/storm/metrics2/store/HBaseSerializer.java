@@ -18,7 +18,6 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -64,8 +63,8 @@ public abstract class HBaseSerializer {
 
         HBaseSchemaType type = schema.getSchemaType();
         try {
-            Class<?> clazz = Class.forName(type.getClassName());
-            Constructor<?> ctor = clazz.getConstructor(HConnection.class, HBaseSchema.class);
+            Class<?>       clazz = Class.forName(type.getClassName());
+            Constructor<?> ctor  = clazz.getConstructor(HConnection.class, HBaseSchema.class);
             return (HBaseSerializer) ctor.newInstance(hbaseConnection, schema);
         } catch (Exception e) {
             throw new MetricException("Could not initialize serializer - " + e);
@@ -82,7 +81,6 @@ public abstract class HBaseSerializer {
 
         // TODO: fix configuration lookup
         this._hbaseConnection = hbaseConnection;
-        Configuration conf = hbaseConnection.getConfiguration();
         this._schema = schema;
         this.metaData = new MetaData[HBaseMetadataIndex.count()];
 
@@ -90,7 +88,6 @@ public abstract class HBaseSerializer {
             assignMetaDataTable(index);
             initializeMap(index);
         }
-
     }
 
     /**
@@ -102,9 +99,9 @@ public abstract class HBaseSerializer {
     private void assignMetaDataTable(HBaseMetadataIndex meta) {
         int i = meta.getIndex();
         try {
-            HBaseAdmin hbaseAdmin = new HBaseAdmin(_hbaseConnection);
-            HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
-            TableName name = info.getTableName();
+            HBaseAdmin                    hbaseAdmin = new HBaseAdmin(_hbaseConnection);
+            HBaseSchema.MetadataTableInfo info       = _schema.metadataTableInfos[i];
+            TableName                     name       = info.getTableName();
 
             if (!hbaseAdmin.tableExists(name)) {
                 hbaseAdmin.createTable(info.getDescriptor());
@@ -114,11 +111,12 @@ public abstract class HBaseSerializer {
 
             // set column counter
             byte[] refcounter = info.getRefcounter();
-            byte[] value = Bytes.toBytes(0L);
-            byte[] cf = info.getColumnFamily();
-            byte[] column = info.getColumn();
-            Put p = new Put(refcounter);
+            byte[] value      = Bytes.toBytes(0L);
+            byte[] cf         = info.getColumnFamily();
+            byte[] column     = info.getColumn();
+            Put    p          = new Put(refcounter);
             p.add(cf, column, value);
+
             metaData[i].table.checkAndPut(refcounter, cf, column, null, p);
 
         } catch (IOException e) {
@@ -134,26 +132,26 @@ public abstract class HBaseSerializer {
     private void initializeMap(HBaseMetadataIndex meta) {
         int i = meta.getIndex();
         if (metaData[i].map == null)
-            metaData[i].map = new HashMap<String, Integer>();
+            metaData[i].map = new HashMap<>();
         if (metaData[i].rmap == null)
-            metaData[i].rmap = new HashMap<Integer, String>();
+            metaData[i].rmap = new HashMap<>();
 
-        Scan s = new Scan();
+        Scan   s            = new Scan();
         byte[] columnFamily = _schema.metadataTableInfos[i].getColumnFamily();
-        byte[] column = _schema.metadataTableInfos[i].getColumn();
+        byte[] column       = _schema.metadataTableInfos[i].getColumn();
         s.addColumn(columnFamily, column);
 
         try {
             ResultScanner scanner = metaData[i].table.getScanner(s);
 
             scanner.forEach((result) -> {
-                byte[] key = result.getRow();
+                byte[] key   = result.getRow();
                 byte[] value = result.getValue(columnFamily, column);
 
                 // NOTE: key REFCOUNTER stores a long
                 // valueInteger returns int from upper 4 bytes of stored long
                 // Thus, REFCOUNTER value in local map will always be incorrect
-                String keyString = Bytes.toString(key);
+                String  keyString    = Bytes.toString(key);
                 Integer valueInteger = Bytes.toInt(value);
 
                 metaData[i].map.put(keyString, valueInteger);
@@ -174,13 +172,13 @@ public abstract class HBaseSerializer {
      */
     private Integer checkExistingMapping(String keyStr, HBaseMetadataIndex metaIndex) {
 
-        int i = metaIndex.getIndex();
-        MetaData meta = metaData[i];
+        int                           i    = metaIndex.getIndex();
+        MetaData                      meta = metaData[i];
         HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
 
-        byte[] key = Bytes.toBytes(keyStr);
+        byte[] key          = Bytes.toBytes(keyStr);
         byte[] columnFamily = info.getColumnFamily();
-        byte[] column = info.getColumn();
+        byte[] column       = info.getColumn();
 
         Get g = new Get(key);
         g.addColumn(columnFamily, column);
@@ -207,14 +205,14 @@ public abstract class HBaseSerializer {
      */
     private Integer insertNewMapping(String keyStr, HBaseMetadataIndex metaIndex) {
 
-        int i = metaIndex.getIndex();
-        MetaData meta = metaData[i];
+        int                           i    = metaIndex.getIndex();
+        MetaData                      meta = metaData[i];
         HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
 
-        byte[] key = Bytes.toBytes(keyStr);
+        byte[] key          = Bytes.toBytes(keyStr);
         byte[] columnFamily = info.getColumnFamily();
-        byte[] column = info.getColumn();
-        byte[] refcounter = info.getRefcounter();
+        byte[] column       = info.getColumn();
+        byte[] refcounter   = info.getRefcounter();
 
 
         // Get current refcounter
@@ -229,7 +227,7 @@ public abstract class HBaseSerializer {
 
         // Create new Put instance with ref obtained above
         try {
-            Put p = new Put(key);
+            Put    p     = new Put(key);
             byte[] value = Bytes.toBytes(counter);
             p.add(columnFamily, column, value);
             meta.table.put(p);
@@ -251,7 +249,7 @@ public abstract class HBaseSerializer {
      */
     private Integer getRef(HBaseMetadataIndex metaIndex, String key) {
 
-        int i = metaIndex.getIndex();
+        int      i    = metaIndex.getIndex();
         MetaData meta = metaData[i];
 
         Integer ref = meta.map.get(key);
@@ -277,7 +275,7 @@ public abstract class HBaseSerializer {
      */
     private String getReverseRef(HBaseMetadataIndex metaIndex, Integer ref) {
 
-        int i = metaIndex.getIndex();
+        int      i    = metaIndex.getIndex();
         MetaData meta = metaData[i];
 
         if (!meta.rmap.containsKey(ref) && ref != null) {
@@ -305,12 +303,12 @@ public abstract class HBaseSerializer {
      * @throws MetricException On key creation failure, null metric entries
      */
     public byte[] createKey(Metric m) throws MetricException {
-        Integer topoId = getRef(TOPOLOGY, m.getTopoIdStr());
-        Integer streamId = getRef(STREAM, m.getStream());
-        Integer hostId = getRef(HOST, m.getHost());
-        Integer compId = getRef(COMP, m.getCompName());
+        Integer topoId       = getRef(TOPOLOGY, m.getTopoIdStr());
+        Integer streamId     = getRef(STREAM, m.getStream());
+        Integer hostId       = getRef(HOST, m.getHost());
+        Integer compId       = getRef(COMP, m.getCompName());
         Integer metricNameId = getRef(METRICNAME, m.getMetricName());
-        Integer executorId = getRef(EXECUTOR, m.getExecutor());
+        Integer executorId   = getRef(EXECUTOR, m.getExecutor());
 
         ByteBuffer bb = ByteBuffer.allocate(KEY_LENGTH);
 
@@ -345,27 +343,27 @@ public abstract class HBaseSerializer {
      */
     public boolean populateMetricKey(Metric m, Result result) {
 
-        byte[] key = result.getRow();
-        long timeStamp = result.rawCells()[0].getTimestamp();
+        byte[] key       = result.getRow();
+        long   timeStamp = result.rawCells()[0].getTimestamp();
 
         ByteBuffer bb = ByteBuffer.allocate(KEY_LENGTH).put(key);
         bb.rewind();
 
-        Byte aggLevel = bb.get();
-        Integer topoId = bb.getInt();
+        Byte    aggLevel     = bb.get();
+        Integer topoId       = bb.getInt();
         Integer metricNameId = bb.getInt();
-        Integer compId = bb.getInt();
-        Integer executorId = bb.getInt();
-        Integer hostId = bb.getInt();
-        long port = bb.getLong();
-        Integer streamId = bb.getInt();
+        Integer compId       = bb.getInt();
+        Integer executorId   = bb.getInt();
+        Integer hostId       = bb.getInt();
+        long    port         = bb.getLong();
+        Integer streamId     = bb.getInt();
 
-        String topoIdStr = getReverseRef(TOPOLOGY, topoId);
+        String topoIdStr     = getReverseRef(TOPOLOGY, topoId);
         String metricNameStr = getReverseRef(METRICNAME, metricNameId);
-        String compIdStr = getReverseRef(COMP, compId);
-        String execIdStr = getReverseRef(EXECUTOR, executorId);
-        String hostIdStr = getReverseRef(HOST, hostId);
-        String streamIdStr = getReverseRef(STREAM, streamId);
+        String compIdStr     = getReverseRef(COMP, compId);
+        String execIdStr     = getReverseRef(EXECUTOR, executorId);
+        String hostIdStr     = getReverseRef(HOST, hostId);
+        String streamIdStr   = getReverseRef(STREAM, streamId);
 
         m.setAggLevel(aggLevel);
         m.setTopoIdStr(topoIdStr);
@@ -399,23 +397,23 @@ public abstract class HBaseSerializer {
     public List<Scan> createScanOperation(HashMap<String, Object> settings) {
 
         // grab values from map
-        Integer aggLevel = (Integer) settings.get(StringKeywords.aggLevel);
-        String topoIdStr = (String) settings.get(StringKeywords.topoId);
-        String compIdStr = (String) settings.get(StringKeywords.component);
-        String execIdStr = (String) settings.get(StringKeywords.executor);
-        String hostIdStr = (String) settings.get(StringKeywords.host);
-        String portStr = (String) settings.get(StringKeywords.port);
-        String streamIdStr = (String) settings.get(StringKeywords.stream);
+        Integer         aggLevel     = (Integer) settings.get(StringKeywords.aggLevel);
+        String          topoIdStr    = (String) settings.get(StringKeywords.topoId);
+        String          compIdStr    = (String) settings.get(StringKeywords.component);
+        String          execIdStr    = (String) settings.get(StringKeywords.executor);
+        String          hostIdStr    = (String) settings.get(StringKeywords.host);
+        String          portStr      = (String) settings.get(StringKeywords.port);
+        String          streamIdStr  = (String) settings.get(StringKeywords.stream);
         HashSet<String> metricStrSet = (HashSet<String>) settings.get(StringKeywords.metricSet);
-        Set<TimeRange> timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
+        Set<TimeRange>  timeRangeSet = (Set<TimeRange>) settings.get(StringKeywords.timeRangeSet);
 
         // convert strings to Integer references
-        Integer topoId = getRef(TOPOLOGY, topoIdStr);
-        Integer compId = getRef(COMP, compIdStr);
-        Integer execId = getRef(EXECUTOR, execIdStr);
-        Integer hostId = getRef(HOST, hostIdStr);
+        Integer topoId   = getRef(TOPOLOGY, topoIdStr);
+        Integer compId   = getRef(COMP, compIdStr);
+        Integer execId   = getRef(EXECUTOR, execIdStr);
+        Integer hostId   = getRef(HOST, hostIdStr);
         Integer streamId = getRef(STREAM, streamIdStr);
-        Long port = (portStr == null) ? null : Long.parseLong(portStr);
+        Long    port     = (portStr == null) ? null : Long.parseLong(portStr);
 
         HashSet<Integer> metricIds = null;
 
@@ -428,7 +426,6 @@ public abstract class HBaseSerializer {
                 else
                     LOG.error("Could not lookup {} reference", s);
             }
-            LOG.info("{}-{}", metricStrSet, metricIds);
         }
 
         HBaseStoreScan scan = new HBaseStoreScan()

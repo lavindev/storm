@@ -20,7 +20,6 @@ package org.apache.storm.metrics2.store;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.client.HTableInterface;
 import org.apache.hadoop.hbase.client.Result;
@@ -35,6 +34,8 @@ import java.util.*;
 
 import static org.junit.Assert.*;
 
+//import org.apache.hadoop.hbase.HBaseTestingUtility;
+
 public class HBaseStoreTest {
 
     // manual parameters
@@ -43,12 +44,12 @@ public class HBaseStoreTest {
 
     private final static String HBASE_ROOT_DIR = "/tmp/hbase";
     private final static String ZOOKEEPER_ROOT = "/storm";
-    private final static List<String> ZOOKEEPER_SERVERS = Arrays.asList("localhost");
+    private final static List<String> ZOOKEEPER_SERVERS = Arrays.asList("localhost", "127.0.0.1");
     private final static int ZOOKEEPER_PORT = 2181;
     private final static int ZOOKEEPER_SESSION_TIMEOUT = 20000;
 
     private static HBaseStore store;
-    private static HBaseTestingUtility testUtil;
+    //private static HBaseTestingUtility testUtil;
     private static HTableInterface metricsTable;
     private static Random random = new Random();
 
@@ -139,13 +140,13 @@ public class HBaseStoreTest {
         Configuration conf = HBaseConfiguration.create();
 
         Object zookeeperServers = config.get("storm.metrics2.store.HBaseStore.zookeeper.servers");
-        String zkPrefix = (zookeeperServers == null) ? "storm.zookeeper" : "storm.metrics2.store.HBaseStore.zookeeper";
+        String zkPrefix         = (zookeeperServers == null) ? "storm.zookeeper" : "storm.metrics2.store.HBaseStore.zookeeper";
 
-        String hbaseRootDir = (String) config.get("storm.metrics2.store.HBaseStore.hbase.root_dir");
-        String zookeeperQuorum = String.join(";", (List) config.get(zkPrefix + ".servers"));
-        String zookeeperRoot = (String) config.get(zkPrefix + ".root");
-        int zookeeperPort = (int) config.get(zkPrefix + ".port");
-        int zookeeperSessionTimeout = (int) config.get(zkPrefix + ".session.timeout");
+        String hbaseRootDir            = (String) config.get("storm.metrics2.store.HBaseStore.hbase.root_dir");
+        String zookeeperQuorum         = String.join(",", (List) config.get(zkPrefix + ".servers"));
+        String zookeeperRoot           = (String) config.get(zkPrefix + ".root");
+        int    zookeeperPort           = (int) config.get(zkPrefix + ".port");
+        int    zookeeperSessionTimeout = (int) config.get(zkPrefix + ".session.timeout");
 
         conf.set(HConstants.HBASE_DIR, hbaseRootDir);
         conf.set(HConstants.ZOOKEEPER_QUORUM, zookeeperQuorum);
@@ -164,35 +165,35 @@ public class HBaseStoreTest {
     @BeforeClass
     public static void setUp() {
 
-        HashMap<String, Object> conf = makeConfig();
-        store = new HBaseStore();
-        Configuration hbaseConf = createHBaseConfiguration(conf);
-
-        testUtil = new HBaseTestingUtility(hbaseConf);
-
-        try {
-            testUtil.startMiniCluster();
-
-            // set ZK info from test cluster - not the same as passed in above
-            int zkPort = testUtil.getZkCluster().getClientPort();
-            conf.put("storm.metrics2.store.HBaseStore.zookeeper.port", zkPort);
-            conf.put("storm.zookeeper.port", zkPort);
-
-            store.prepare(conf);
-            metricsTable = store.getMetricsTable();
-        } catch (Exception e) {
-            fail("Unexpected exception" + e);
-        }
+//        HashMap<String, Object> conf = makeConfig();
+//        store = new HBaseStore();
+//        Configuration hbaseConf = createHBaseConfiguration(conf);
+//
+//        testUtil = new HBaseTestingUtility(hbaseConf);
+//
+//        try {
+//            testUtil.startMiniCluster();
+//
+//            // set ZK info from test cluster - not the same as passed in above
+//            int zkPort = testUtil.getZkCluster().getClientPort();
+//            conf.put("storm.metrics2.store.HBaseStore.zookeeper.port", zkPort);
+//            conf.put("storm.zookeeper.port", zkPort);
+//
+//            store.prepare(conf);
+//            metricsTable = store.getMetricsTable();
+//        } catch (Exception e) {
+//            fail("Unexpected exception" + e);
+//        }
 
     }
 
     @AfterClass
     public static void tearDown() {
-        try {
-            testUtil.shutdownMiniCluster();
-        } catch (Exception e) {
-            fail("Unexpected - " + e);
-        }
+//        try {
+//            testUtil.shutdownMiniCluster();
+//        } catch (Exception e) {
+//            fail("Unexpected - " + e);
+//        }
     }
 
     @Test
@@ -219,7 +220,7 @@ public class HBaseStoreTest {
         store.insert(m);
 
         ResultScanner scanner;
-        Scan s = new Scan();
+        Scan          s = new Scan();
         try {
             scanner = metricsTable.getScanner(s);
         } catch (Exception e) {
@@ -244,7 +245,7 @@ public class HBaseStoreTest {
         store.insert(m);
 
         ResultScanner scanner;
-        Scan s = new Scan();
+        Scan          s = new Scan();
         try {
             scanner = metricsTable.getScanner(s);
         } catch (Exception e) {
@@ -273,8 +274,8 @@ public class HBaseStoreTest {
             store.insert(m);
         }
 
-        Integer aggLevel = metricsList.get(0).getAggLevel().intValue();
-        String topoIdStr = metricsList.get(0).getTopoIdStr();
+        Integer aggLevel  = metricsList.get(0).getAggLevel().intValue();
+        String  topoIdStr = metricsList.get(0).getTopoIdStr();
 
         HashMap<String, Object> settings = new HashMap<>();
         settings.put(StringKeywords.aggLevel, aggLevel);
@@ -327,8 +328,8 @@ public class HBaseStoreTest {
             store.insert(m);
         }
 
-        HashMap<String, Object> settings = new HashMap<>();
-        HashSet<TimeRange> timeRangeSet = new HashSet<>();
+        HashMap<String, Object> settings     = new HashMap<>();
+        HashSet<TimeRange>      timeRangeSet = new HashSet<>();
         timeRangeSet.add(new TimeRange(1L, 10L + 1L, Window.ALL));
         timeRangeSet.add(new TimeRange(101L, 110L + 1L, Window.ALL));
 
