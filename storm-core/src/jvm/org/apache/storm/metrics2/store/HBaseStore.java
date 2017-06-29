@@ -66,14 +66,6 @@ public class HBaseStore implements MetricStore {
         } catch (IOException e) {
             throw new MetricException("Could not connect to hbase " + e);
         }
-
-        // Benchmark stuff
-        List<String> metricNames = Arrays.asList("emitted", "transferred", "latency-complete", "latency-execute",
-                "latency-process", "acked", "failed");
-
-        HBaseBench bench = new HBaseBench(this, 1).withMetricNames(metricNames);
-        bench.start();
-
     }
 
 

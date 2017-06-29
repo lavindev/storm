@@ -78,7 +78,6 @@ public abstract class HBaseSerializer {
      */
     public HBaseSerializer(HConnection hbaseConnection, HBaseSchema schema) {
 
-        // TODO: fix configuration lookup
         this._hbaseConnection = hbaseConnection;
         this._schema = schema;
         this.metaData = new MetaData[HBaseMetadataIndex.count()];
@@ -98,7 +97,7 @@ public abstract class HBaseSerializer {
     private void assignMetaDataTable(HBaseMetadataIndex meta) {
         int i = meta.getIndex();
         try {
-            HBaseSchema.MetadataTableInfo info       = _schema.metadataTableInfos[i];
+            HBaseSchema.MetadataTableInfo info = _schema.metadataTableInfos[i];
 
             this.metaData[i] = new MetaData();
             this.metaData[i].table = _hbaseConnection.getTable(info.getTableName());

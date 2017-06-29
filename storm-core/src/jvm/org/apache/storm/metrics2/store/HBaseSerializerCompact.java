@@ -110,6 +110,7 @@ public class HBaseSerializerCompact extends HBaseSerializer {
             }
 
             return true;
+
         } catch (NullPointerException e) {
             m.setValue(0.00);
             m.setCount(0L);
