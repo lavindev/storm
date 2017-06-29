@@ -23,35 +23,36 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public class HBaseBench {
+public class HBaseBench implements Runnable {
     private final static Logger LOG = LoggerFactory.getLogger(HBaseBench.class);
 
-    private int scanCount;
     private int writeCount;
-    private int rounds;
+    private int incrementalRuns;
     private List<String> metricNames;
-    private long idPrefix;
+    private long threadID;
+    private long prefix;
     private Random random;
     private HBaseStore store;
+    private Thread t;
 
-    private HashMap<Integer, ArrayList<Integer>> writeTimer;
-    private HashMap<Integer, ArrayList<Integer>> scanTimer;
-    private HashMap<Integer, ArrayList<Integer>> aggWriteTimer;
+    private ArrayList<Integer> writeTimer;
+    private ArrayList<Integer> scanTimer;
+    private ArrayList<Integer> aggWriteTimer;
 
-    public HBaseBench(HBaseStore store, long idPrefix) {
-        this.scanCount = 25;
-        this.writeCount = 500;
-        this.rounds = 3;
+    HBaseBench(HBaseStore store, long threadID) {
+        this.writeCount = 20;
+        this.incrementalRuns = 10;
         this.metricNames = Arrays.asList("testMetric1", "testMetric2", "testMetric3");
-        this.idPrefix = idPrefix;
+        this.threadID = threadID;
         this.random = new Random();
+        this.prefix = random.nextLong();
         this.store = store;
-        this.writeTimer = new HashMap<>(rounds);
-        this.aggWriteTimer = new HashMap<>(rounds);
-        this.scanTimer = new HashMap<>(rounds);
+        this.writeTimer = new ArrayList<>();
+        this.aggWriteTimer = new ArrayList<>();
+        this.scanTimer = new ArrayList<>();
     }
 
-    public HBaseBench withMetricNames(List<String> metrics) {
+    HBaseBench withMetricNames(List<String> metrics) {
         this.metricNames = metrics;
         return this;
     }
@@ -63,18 +64,18 @@ public class HBaseBench {
     private Metric makeMetric(String metricName) {
         long ts = System.currentTimeMillis();
         Metric m = new Metric(metricName, ts,
-                idPrefix + "Executor",
-                idPrefix + "Comp",
-                idPrefix + "Stream" + random.nextInt(),
-                idPrefix + "Topo",
+                prefix + "Executor",
+                prefix + "Comp",
+                prefix + "Stream" + random.nextInt(),
+                prefix + "Topo",
                 123.45);
         m.setHost("testHost");
+        m.setAggLevel((byte) 1); // for consistency during scan
         return m;
     }
 
     private Metric makeAggMetric(String metricName) {
         Metric m = makeMetric(metricName);
-        m.setAggLevel((byte) 1);
         m.setValue(100.0);
         for (int i = 1; i < 10; ++i) {
             m.updateAverage(100.00 * i);
@@ -82,35 +83,44 @@ public class HBaseBench {
         return m;
     }
 
+    public void start() {
+        LOG.info("Running for node with id = {}", threadID);
 
-    public void run() {
-        LOG.info("Running for node with id = {}", idPrefix);
-
-        for (int i = 0; i < rounds; ++i) {
-            writeTimer.put(i, new ArrayList<>(writeCount));
-            aggWriteTimer.put(i, new ArrayList<>(writeCount));
-            scanTimer.put(i, new ArrayList<>(scanCount));
-            insert(i);
-            scan(i);
-            LOG.info("Round {} complete for {}", i, idPrefix);
+        if (t == null) {
+            t = new Thread(this, String.valueOf(threadID));
+            t.start();
+        } else {
+            LOG.info("thread already running");
         }
 
-        LOG.info("Benchmark complete for {}", idPrefix);
-        LOG.info("Write timer {} = {}", idPrefix, writeTimer);
-        LOG.info("Scan timer {} = {}", idPrefix, scanTimer);
     }
 
 
-    private void insert(int round) {
+    public void run() {
+        LOG.info("run() for id={}", threadID);
+        for (int i = 0; i < this.incrementalRuns; ++i) {
+            LOG.info("insert() for id={}", threadID);
+            insert();
+            LOG.info("scan() for id={}", threadID);
+            scan();
+        }
+        LOG.info("Benchmark complete for {}", threadID);
+        LOG.info("Write timer {} = {}", threadID, writeTimer);
+        LOG.info("Aggregate Write timer {} = {}", threadID, aggWriteTimer);
+        LOG.info("Scan timer {} = {}", threadID, scanTimer);
+    }
+
+
+    private void insert() {
         for (int i = 0; i <= writeCount; ++i) {
             long startTime = timeNow();
             for (String metricName : metricNames) {
                 Metric m = makeMetric(metricName);
                 store.insert(m);
             }
-            long endTime = timeNow();
-            int duration = (int) (endTime - startTime);
-            writeTimer.get(round).add(duration);
+            long endTime  = timeNow();
+            int  duration = (int) (endTime - startTime);
+            writeTimer.add(duration);
         }
 
         for (int i = 0; i <= writeCount; ++i) {
@@ -119,27 +129,25 @@ public class HBaseBench {
                 Metric m = makeAggMetric(metricName);
                 store.insert(m);
             }
-            long endTime = timeNow();
-            int duration = (int) (endTime - startTime);
-            aggWriteTimer.get(round).add(duration);
+            long endTime  = timeNow();
+            int  duration = (int) (endTime - startTime);
+            aggWriteTimer.add(duration);
         }
     }
 
-    private void scan(int round) {
-
+    private void scan() {
+        int[] counter = new int[1];
+        counter[0] = 0;
         HashMap<String, Object> settings = new HashMap<>();
-        HashSet<Metric> metricsRetrieved = new HashSet<>();
-        for (int i = 0; i <= scanCount; ++i) {
+        settings.put(StringKeywords.aggLevel, 1);
+        settings.put(StringKeywords.topoId, String.valueOf(prefix) + "Topo");
 
-            long startTime = timeNow();
-            store.scan(settings, (metric, timeRange) -> metricsRetrieved.add(metric));
-            long endTime = timeNow();
-            int duration = (int) (endTime - startTime);
-            scanTimer.get(round).add(duration);
-
-            LOG.info("Scanned {} metrics", metricsRetrieved.size());
-            metricsRetrieved.clear();
-        }
+        long startTime = timeNow();
+        store.scan(settings, (metric, timeRange) -> ++counter[0]);
+        long endTime  = timeNow();
+        int  duration = (int) (endTime - startTime);
+        scanTimer.add(duration);
+        LOG.info("Scanned {} metrics", counter[0]);
     }
 
 

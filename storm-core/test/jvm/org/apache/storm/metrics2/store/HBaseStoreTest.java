@@ -19,13 +19,10 @@ package org.apache.storm.metrics2.store;
 
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.client.HTableInterface;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.storm.generated.Window;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -34,39 +31,18 @@ import java.util.*;
 
 import static org.junit.Assert.*;
 
-//import org.apache.hadoop.hbase.HBaseTestingUtility;
-
 public class HBaseStoreTest {
 
-    // manual parameters
-    private final static String DEFAULT_ZK_PREFIX = "storm.metrics2.store.HBaseStore.zookeeper";
-    private final static String SCHEMA_TYPE = "expanded";
-
-    private final static String HBASE_ROOT_DIR = "/tmp/hbase";
-    private final static String ZOOKEEPER_ROOT = "/storm";
-    private final static List<String> ZOOKEEPER_SERVERS = Arrays.asList("localhost", "127.0.0.1");
-    private final static int ZOOKEEPER_PORT = 2181;
-    private final static int ZOOKEEPER_SESSION_TIMEOUT = 20000;
+    private static final String SCHEMA_TYPE = "compact";
 
     private static HBaseStore store;
-    //private static HBaseTestingUtility testUtil;
+    private static HBaseTestingUtility testUtil;
     private static HTableInterface metricsTable;
     private static Random random = new Random();
 
     private static HashMap<String, Object> makeConfig() {
-        return makeConfig(DEFAULT_ZK_PREFIX);
-    }
-
-    private static HashMap<String, Object> makeConfig(String zkPrefix) {
 
         HashMap<String, Object> confMap = new HashMap<>();
-
-        confMap.put("storm.metrics2.store.HBaseStore.hbase.root_dir", HBASE_ROOT_DIR);
-        confMap.put(zkPrefix + ".servers", ZOOKEEPER_SERVERS);
-        confMap.put(zkPrefix + ".port", ZOOKEEPER_PORT);
-        confMap.put(zkPrefix + ".root", ZOOKEEPER_ROOT);
-        confMap.put(zkPrefix + ".session.timeout", ZOOKEEPER_SESSION_TIMEOUT);
-
         // metadata map
         HashMap<String, Object> metaDataMap = new HashMap<>();
         List<String> metadataNames = Arrays.asList("topoMap", "streamMap", "hostMap",
@@ -74,8 +50,8 @@ public class HBaseStoreTest {
 
         metadataNames.forEach((name) -> {
             HashMap<String, String> m = new HashMap<>();
-            m.put("name", name);
-            m.put("cf", "c");
+            m.put("name", "metrics");
+            m.put("cf", "m");
             m.put("column", "c");
             m.put("refcounter", "REFCOUNTER");
             metaDataMap.put(name, m);
@@ -135,83 +111,69 @@ public class HBaseStoreTest {
         return m;
     }
 
-    private static Configuration createHBaseConfiguration(Map config) {
-
-        Configuration conf = HBaseConfiguration.create();
-
-        Object zookeeperServers = config.get("storm.metrics2.store.HBaseStore.zookeeper.servers");
-        String zkPrefix         = (zookeeperServers == null) ? "storm.zookeeper" : "storm.metrics2.store.HBaseStore.zookeeper";
-
-        String hbaseRootDir            = (String) config.get("storm.metrics2.store.HBaseStore.hbase.root_dir");
-        String zookeeperQuorum         = String.join(",", (List) config.get(zkPrefix + ".servers"));
-        String zookeeperRoot           = (String) config.get(zkPrefix + ".root");
-        int    zookeeperPort           = (int) config.get(zkPrefix + ".port");
-        int    zookeeperSessionTimeout = (int) config.get(zkPrefix + ".session.timeout");
-
-        conf.set(HConstants.HBASE_DIR, hbaseRootDir);
-        conf.set(HConstants.ZOOKEEPER_QUORUM, zookeeperQuorum);
-        conf.set(HConstants.ZOOKEEPER_DATA_DIR, zookeeperRoot);
-        conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zookeeperPort);
-        conf.setInt(HConstants.ZK_SESSION_TIMEOUT, zookeeperSessionTimeout);
-
-        // security
-        //conf.set("hbase.security.authentication", "kerberos");
-        //conf.set("hbase.rpc.protection", "privacy");
-
-        return conf;
-    }
-
 
     @BeforeClass
     public static void setUp() {
 
-//        HashMap<String, Object> conf = makeConfig();
-//        store = new HBaseStore();
-//        Configuration hbaseConf = createHBaseConfiguration(conf);
-//
-//        testUtil = new HBaseTestingUtility(hbaseConf);
-//
-//        try {
-//            testUtil.startMiniCluster();
-//
-//            // set ZK info from test cluster - not the same as passed in above
-//            int zkPort = testUtil.getZkCluster().getClientPort();
-//            conf.put("storm.metrics2.store.HBaseStore.zookeeper.port", zkPort);
-//            conf.put("storm.zookeeper.port", zkPort);
-//
-//            store.prepare(conf);
-//            metricsTable = store.getMetricsTable();
-//        } catch (Exception e) {
-//            fail("Unexpected exception" + e);
-//        }
+        HashMap<String, Object> conf = makeConfig();
+        store = new HBaseStore();
+        Configuration hbaseConf = HBaseConfiguration.create();
 
+        testUtil = new HBaseTestingUtility(hbaseConf);
+
+        try {
+            testUtil.startMiniCluster();
+            initSchema(conf, testUtil.getHBaseAdmin());
+            // set ZK info from test cluster - not the same as passed in above
+            int zkPort = testUtil.getZkCluster().getClientPort();
+            conf.put("HBaseZookeeperPortOverride", zkPort);
+
+            store.prepare(conf);
+            metricsTable = store.getMetricsTable();
+        } catch (Exception e) {
+            fail("Unexpected exception" + e);
+        }
+    }
+
+    private static void initSchema(Map conf, HBaseAdmin admin) {
+        try {
+            HBaseSchema                                      schema   = new HBaseSchema(conf);
+            HashMap<TableName, ArrayList<HColumnDescriptor>> tableMap = schema.getTableMap();
+
+            for (Map.Entry<TableName, ArrayList<HColumnDescriptor>> entry : tableMap.entrySet()) {
+
+                TableName               name        = entry.getKey();
+                List<HColumnDescriptor> columnsList = entry.getValue();
+
+                HTableDescriptor descriptor = new HTableDescriptor(name);
+                for (HColumnDescriptor columnDescriptor : columnsList) {
+                    descriptor.addFamily(columnDescriptor);
+                }
+                admin.createTable(descriptor);
+
+            }
+        } catch (Exception e) {
+            fail("Unexpected exception - " + e);
+        }
+    }
+
+    @After
+    public void sleep() {
+        // add an artificial delay to avoid comodification errors
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            fail("Unexpected exception - " + e);
+        }
     }
 
     @AfterClass
     public static void tearDown() {
-//        try {
-//            testUtil.shutdownMiniCluster();
-//        } catch (Exception e) {
-//            fail("Unexpected - " + e);
-//        }
-    }
-
-    @Test
-    public void testPrepareInvalidConf() {
-//        HBaseStore store = new HBaseStore();
-//        // call prepare() with one config entry missing each iteration
-//        for (Object key : conf.keySet()) {
-//            TreeMap<String, Object> testMap = new TreeMap<String, Object>(conf);
-//            testMap.remove((String) key);
-//
-//            boolean exceptionThrown = false;
-//            try {
-//                store.prepare(testMap);
-//            } catch (MetricException e) {
-//                exceptionThrown = true;
-//            }
-//            assertTrue(exceptionThrown);
-//        }
+        try {
+            testUtil.shutdownMiniCluster();
+        } catch (Exception e) {
+            fail("Unexpected - " + e);
+        }
     }
 
     @Test

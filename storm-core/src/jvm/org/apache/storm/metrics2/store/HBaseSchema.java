@@ -19,14 +19,10 @@ package org.apache.storm.metrics2.store;
 
 
 import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.apache.storm.metrics2.store.ConfigKeywords.SCHEMA_KEY;
 
@@ -35,7 +31,7 @@ public class HBaseSchema {
     public class MetricsTableInfo {
 
         private TableName tableName;
-        private HTableDescriptor descriptor;
+        private HColumnDescriptor descriptor;
         private byte[] columnFamily;
         private byte[] valueColumn;
         private byte[] sumColumn;
@@ -59,16 +55,14 @@ public class HBaseSchema {
             this.minColumn = (minColumn != null) ? Bytes.toBytes(minColumn) : null;
             this.maxColumn = (maxColumn != null) ? Bytes.toBytes(maxColumn) : null;
 
-            HColumnDescriptor columnDescriptor = new HColumnDescriptor(columnFamily);
-            this.descriptor = new HTableDescriptor(this.tableName);
-            this.descriptor.addFamily(columnDescriptor);
+            this.descriptor = new HColumnDescriptor(columnFamily);
         }
 
         public TableName getTableName() {
             return tableName;
         }
 
-        public HTableDescriptor getDescriptor() {
+        public HColumnDescriptor getDescriptor() {
             return descriptor;
         }
 
@@ -100,7 +94,7 @@ public class HBaseSchema {
     public class MetadataTableInfo {
 
         private TableName tableName;
-        private HTableDescriptor descriptor;
+        private HColumnDescriptor descriptor;
         private byte[] columnFamily;
         private byte[] column;
         private byte[] refcounter;
@@ -112,16 +106,14 @@ public class HBaseSchema {
             this.column = Bytes.toBytes(column);
             this.refcounter = Bytes.toBytes(refcounter);
 
-            HColumnDescriptor columnDescriptor = new HColumnDescriptor(columnFamily);
-            this.descriptor = new HTableDescriptor(this.tableName);
-            this.descriptor.addFamily(columnDescriptor);
+            this.descriptor = new HColumnDescriptor(columnFamily);
         }
 
         public TableName getTableName() {
             return tableName;
         }
 
-        public HTableDescriptor getDescriptor() {
+        public HColumnDescriptor getDescriptor() {
             return descriptor;
         }
 
@@ -166,6 +158,23 @@ public class HBaseSchema {
 
     public HBaseSchemaType getSchemaType() {
         return this.schemaType;
+    }
+
+    public HashMap<TableName, ArrayList<HColumnDescriptor>> getTableMap() {
+
+        HashMap<TableName, ArrayList<HColumnDescriptor>> tableMap = new HashMap<>();
+
+        tableMap.put(metricsTableInfo.tableName, new ArrayList<HColumnDescriptor>());
+        for (MetadataTableInfo metadataTableInfo : metadataTableInfos) {
+            tableMap.put(metadataTableInfo.tableName, new ArrayList<HColumnDescriptor>());
+        }
+
+        tableMap.get(metricsTableInfo.tableName).add(metricsTableInfo.descriptor);
+        for (MetadataTableInfo metadataTableInfo : metadataTableInfos) {
+            tableMap.get(metadataTableInfo.tableName).add(metadataTableInfo.descriptor);
+        }
+
+        return tableMap;
     }
 
     private void createMetricsDescriptor(Map metricsMap) {

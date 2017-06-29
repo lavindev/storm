@@ -18,7 +18,6 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
@@ -99,15 +98,10 @@ public abstract class HBaseSerializer {
     private void assignMetaDataTable(HBaseMetadataIndex meta) {
         int i = meta.getIndex();
         try {
-            HBaseAdmin                    hbaseAdmin = new HBaseAdmin(_hbaseConnection);
             HBaseSchema.MetadataTableInfo info       = _schema.metadataTableInfos[i];
-            TableName                     name       = info.getTableName();
 
-            if (!hbaseAdmin.tableExists(name)) {
-                hbaseAdmin.createTable(info.getDescriptor());
-            }
             this.metaData[i] = new MetaData();
-            this.metaData[i].table = _hbaseConnection.getTable(name);
+            this.metaData[i].table = _hbaseConnection.getTable(info.getTableName());
 
             // set column counter
             byte[] refcounter = info.getRefcounter();
@@ -120,9 +114,10 @@ public abstract class HBaseSerializer {
             metaData[i].table.checkAndPut(refcounter, cf, column, null, p);
 
         } catch (IOException e) {
-            LOG.error("Could not assign metrics table", e);
+            LOG.error("Could not assign metadata table", e);
         }
     }
+
 
     /**
      * Initialize string-to-integer key mapping caches

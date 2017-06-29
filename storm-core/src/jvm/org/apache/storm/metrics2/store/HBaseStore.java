@@ -19,9 +19,7 @@ package org.apache.storm.metrics2.store;
 
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,22 +43,26 @@ public class HBaseStore implements MetricStore {
     @Override
     public void prepare(Map config) throws MetricException {
 
-        HBaseSchema   schema    = new HBaseSchema(config);
         Configuration hbaseConf = HBaseConfiguration.create();
 
+        // testing only
+        Integer testUtilPort = (Integer) config.get("HBaseZookeeperPortOverride");
+        if (testUtilPort != null) {
+            hbaseConf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, testUtilPort);
+        }
+        // end
+
         try {
-            HConnection      hbaseConnection = HConnectionManager.createConnection(hbaseConf);
-            HBaseAdmin       hbaseAdmin      = new HBaseAdmin(hbaseConf);
-            HTableDescriptor descriptor      = schema.metricsTableInfo.getDescriptor();
-            TableName        metricsTable    = schema.metricsTableInfo.getTableName();
+            HConnection hbaseConnection = HConnectionManager.createConnection(hbaseConf);
+            HBaseAdmin  hbaseAdmin      = new HBaseAdmin(hbaseConnection);
+            HBaseSchema schema          = new HBaseSchema(config);
 
-            if (!hbaseAdmin.tableExists(metricsTable)) {
-                hbaseAdmin.createTable(descriptor);
-                LOG.info("Table {} created", metricsTable.getNameAsString());
-            }
+            validateTables(hbaseAdmin, schema);
 
+            TableName metricsTable = schema.metricsTableInfo.getTableName();
             this._metricsTable = hbaseConnection.getTable(metricsTable);
             this._serializer = HBaseSerializer.createSerializer(hbaseConnection, schema);
+
         } catch (IOException e) {
             throw new MetricException("Could not connect to hbase " + e);
         }
@@ -68,15 +70,31 @@ public class HBaseStore implements MetricStore {
         // Benchmark stuff
         List<String> metricNames = Arrays.asList("emitted", "transferred", "latency-complete", "latency-execute",
                 "latency-process", "acked", "failed");
-        ArrayList<HBaseBench> benchmarks = new ArrayList<>();
 
-        for (int i = 1; i <= 5; ++i) {
-            HBaseBench b = new HBaseBench(this, i).withMetricNames(metricNames);
-            benchmarks.add(b);
+        HBaseBench bench = new HBaseBench(this, 1).withMetricNames(metricNames);
+        bench.start();
+
+    }
+
+
+    private void validateTables(HBaseAdmin admin, HBaseSchema schema) throws IOException, MetricException {
+
+        HashMap<TableName, ArrayList<HColumnDescriptor>> tableMap = schema.getTableMap();
+
+        for (Map.Entry<TableName, ArrayList<HColumnDescriptor>> entry : tableMap.entrySet()) {
+
+            TableName                    name        = entry.getKey();
+            ArrayList<HColumnDescriptor> columnsList = entry.getValue();
+
+            if (!admin.tableExists(name))
+                throw new MetricException("Table " + name.getNameAsString() + " does not exist in store");
+
+            HTableDescriptor        currentDescriptor     = admin.getTableDescriptor(name);
+            List<HColumnDescriptor> currentColumnFamilies = Arrays.asList(currentDescriptor.getColumnFamilies());
+
+            if (!currentColumnFamilies.containsAll(columnsList))
+                throw new MetricException("Table " + name.getNameAsString() + " does not contain all columns");
         }
-
-        benchmarks.parallelStream().forEach(HBaseBench::run);
-
     }
 
     /**
