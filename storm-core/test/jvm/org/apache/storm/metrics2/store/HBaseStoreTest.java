@@ -90,7 +90,7 @@ public class HBaseStoreTest {
         Metric m = new Metric("testMetric", ts,
                 "testExecutor",
                 "testComp",
-                "testStream" + ts,
+                "testStream" + String.valueOf(ts),
                 "testTopo",
                 123.45);
         m.setHost("testHost");
@@ -228,10 +228,30 @@ public class HBaseStoreTest {
     @Test
     public void testScan() {
 
-        ArrayList<Metric> metricsList = new ArrayList<>(10);
+        ArrayList<Metric> metricsList      = new ArrayList<>(10);
+        ArrayList<Metric> retreivedMetrics = new ArrayList<>(10);
 
         for (int i = 1; i <= 10; i++) {
-            Metric m = makeMetric((long) random.nextInt(999));
+            Metric m = makeMetric(random.nextInt(9999));
+            metricsList.add(m);
+            store.insert(m);
+        }
+
+        store.scan((metric, timeRanges) -> retreivedMetrics.add(metric));
+
+        assertTrue(retreivedMetrics.containsAll(metricsList));
+
+    }
+
+    @Test
+    public void testFilteredScan() {
+
+
+        ArrayList<Metric> metricsList      = new ArrayList<>(100);
+        ArrayList<Metric> retreivedMetrics = new ArrayList<>(100);
+
+        for (int i = 1; i <= 100; i++) {
+            Metric m = makeMetric(random.nextInt(9999));
             metricsList.add(m);
             store.insert(m);
         }
@@ -239,13 +259,42 @@ public class HBaseStoreTest {
         Integer aggLevel  = metricsList.get(0).getAggLevel().intValue();
         String  topoIdStr = metricsList.get(0).getTopoIdStr();
 
-        HashMap<String, Object> settings = new HashMap<>();
-        settings.put(StringKeywords.aggLevel, aggLevel);
-        settings.put(StringKeywords.topoId, topoIdStr);
+        HashSet<TimeRange> timeRangeSet = new HashSet<>();
+        timeRangeSet.add(new TimeRange((long) 0, (long) 5000, Window.ALL));
+        timeRangeSet.add(new TimeRange((long) 5000, (long) 10000, Window.ALL));
 
-        store.scan(settings, (metric, timeRanges) -> assertTrue(metricsList.contains(metric)));
+        HashSet<String> metricsSet = new HashSet<>();
+        metricsSet.add(metricsList.get(0).getMetricName());
+
+        String compId     = metricsList.get(0).getCompName();
+        String executorId = metricsList.get(0).getExecutor();
+        String hostId     = metricsList.get(0).getHost();
+        String port       = String.valueOf(metricsList.get(0).getPort());
+
+        List<String> filterOrder = Arrays.asList(StringKeywords.aggLevel,
+                StringKeywords.topoId,
+                StringKeywords.timeRangeSet,
+                StringKeywords.metricSet,
+                StringKeywords.component,
+                StringKeywords.executor,
+                StringKeywords.host,
+                StringKeywords.port);
+
+        List<Object> filters = Arrays.asList(aggLevel, topoIdStr, timeRangeSet, metricsSet,
+                compId, executorId, hostId, port);
+
+
+        HashMap<String, Object> settings = new HashMap<>();
+
+        for (int i = 0; i < filterOrder.size(); ++i) {
+            retreivedMetrics.clear();
+            settings.put(filterOrder.get(i), filters.get(i));
+            store.scan(settings, (metric, timeRanges) -> retreivedMetrics.add(metric));
+            assertTrue(retreivedMetrics.containsAll(metricsList));
+        }
 
     }
+
 
     @Test
     public void testPopulateValue() {

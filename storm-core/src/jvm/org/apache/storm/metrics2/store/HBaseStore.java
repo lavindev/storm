@@ -68,7 +68,13 @@ public class HBaseStore implements MetricStore {
         }
     }
 
-
+    /**
+     * Validate existing HBase tables to ensure they match conf schema
+     * @param admin HBase admin object
+     * @param schema HBaseSchema from constructor
+     * @throws IOException On admin IO failure
+     * @throws MetricException On schema mismatch
+     */
     private void validateTables(HBaseAdmin admin, HBaseSchema schema) throws IOException, MetricException {
 
         HashMap<TableName, ArrayList<HColumnDescriptor>> tableMap = schema.getTableMap();
