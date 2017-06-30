@@ -229,7 +229,7 @@ public class HBaseStoreTest {
     public void testScan() {
 
         ArrayList<Metric> metricsList      = new ArrayList<>(10);
-        ArrayList<Metric> retreivedMetrics = new ArrayList<>(10);
+        ArrayList<Metric> retrievedMetrics = new ArrayList<>(10);
 
         for (int i = 1; i <= 10; i++) {
             Metric m = makeMetric(random.nextInt(9999));
@@ -237,9 +237,9 @@ public class HBaseStoreTest {
             store.insert(m);
         }
 
-        store.scan((metric, timeRanges) -> retreivedMetrics.add(metric));
+        store.scan((metric, timeRanges) -> retrievedMetrics.add(metric));
 
-        assertTrue(retreivedMetrics.containsAll(metricsList));
+        assertTrue(retrievedMetrics.containsAll(metricsList));
 
     }
 
@@ -248,7 +248,7 @@ public class HBaseStoreTest {
 
 
         ArrayList<Metric> metricsList      = new ArrayList<>(100);
-        ArrayList<Metric> retreivedMetrics = new ArrayList<>(100);
+        ArrayList<Metric> retrievedMetrics = new ArrayList<>(100);
 
         for (int i = 1; i <= 100; i++) {
             Metric m = makeMetric(random.nextInt(9999));
@@ -260,8 +260,8 @@ public class HBaseStoreTest {
         String  topoIdStr = metricsList.get(0).getTopoIdStr();
 
         HashSet<TimeRange> timeRangeSet = new HashSet<>();
-        timeRangeSet.add(new TimeRange((long) 0, (long) 5000, Window.ALL));
-        timeRangeSet.add(new TimeRange((long) 5000, (long) 10000, Window.ALL));
+        timeRangeSet.add(new TimeRange(0L, 5000L, Window.ALL));
+        timeRangeSet.add(new TimeRange(5000L, 10000L, Window.ALL));
 
         HashSet<String> metricsSet = new HashSet<>();
         metricsSet.add(metricsList.get(0).getMetricName());
@@ -271,30 +271,25 @@ public class HBaseStoreTest {
         String hostId     = metricsList.get(0).getHost();
         String port       = String.valueOf(metricsList.get(0).getPort());
 
-        List<String> filterOrder = Arrays.asList(StringKeywords.aggLevel,
-                StringKeywords.topoId,
-                StringKeywords.timeRangeSet,
-                StringKeywords.metricSet,
-                StringKeywords.component,
-                StringKeywords.executor,
-                StringKeywords.host,
-                StringKeywords.port);
-
-        List<Object> filters = Arrays.asList(aggLevel, topoIdStr, timeRangeSet, metricsSet,
-                compId, executorId, hostId, port);
-
+        LinkedHashMap<String, Object> filterMap = new LinkedHashMap<>();
+        filterMap.put(StringKeywords.aggLevel, aggLevel);
+        filterMap.put(StringKeywords.topoId, topoIdStr);
+        filterMap.put(StringKeywords.timeRangeSet, timeRangeSet);
+        filterMap.put(StringKeywords.metricSet, metricsSet);
+        filterMap.put(StringKeywords.component, compId);
+        filterMap.put(StringKeywords.executor, executorId);
+        filterMap.put(StringKeywords.host, hostId);
+        filterMap.put(StringKeywords.port, port);
 
         HashMap<String, Object> settings = new HashMap<>();
 
-        for (int i = 0; i < filterOrder.size(); ++i) {
-            retreivedMetrics.clear();
-            settings.put(filterOrder.get(i), filters.get(i));
-            store.scan(settings, (metric, timeRanges) -> retreivedMetrics.add(metric));
-            assertTrue(retreivedMetrics.containsAll(metricsList));
-        }
-
+        filterMap.forEach((key, value) -> {
+            retrievedMetrics.clear();
+            settings.put(key, value);
+            store.scan(settings, (metric, timeRanges) -> retrievedMetrics.add(metric));
+            assertTrue(retrievedMetrics.containsAll(metricsList));
+        });
     }
-
 
     @Test
     public void testPopulateValue() {
