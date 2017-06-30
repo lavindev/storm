@@ -267,7 +267,7 @@
         <clojure-data-codec.version>0.1.0</clojure-data-codec.version>
         <clojure-contrib.version>1.2.0</clojure-contrib.version>
         <hive.version>0.14.0</hive.version>
-        <hadoop.version>2.7.3.9.1704132102</hadoop.version>
+        <hadoop.version>2.6.1</hadoop.version>
         <kryo.version>3.0.3</kryo.version>
         <servlet.version>2.5</servlet.version>
         <joda-time.version>2.3</joda-time.version>
@@ -990,16 +990,6 @@
             </snapshots>
             <id>clojars</id>
             <url>https://clojars.org/repo/</url>
-        </repository>
-        <repository>
-            <id>central-ymaven</id>
-                <url>http://ymaven.corp.yahoo.com:9999/proximity/repository/public</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
         </repository>
     </repositories>
 
