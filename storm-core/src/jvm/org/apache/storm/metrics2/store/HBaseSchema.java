@@ -164,9 +164,9 @@ public class HBaseSchema {
 
         HashMap<TableName, ArrayList<HColumnDescriptor>> tableMap = new HashMap<>();
 
-        tableMap.put(metricsTableInfo.tableName, new ArrayList<HColumnDescriptor>());
+        tableMap.put(metricsTableInfo.tableName, new ArrayList<>());
         for (MetadataTableInfo metadataTableInfo : metadataTableInfos) {
-            tableMap.put(metadataTableInfo.tableName, new ArrayList<HColumnDescriptor>());
+            tableMap.put(metadataTableInfo.tableName, new ArrayList<>());
         }
 
         tableMap.get(metricsTableInfo.tableName).add(metricsTableInfo.descriptor);
@@ -177,7 +177,7 @@ public class HBaseSchema {
         return tableMap;
     }
 
-    private void createMetricsDescriptor(Map metricsMap) {
+    private void createMetricsDescriptor(HashMap<String, Object> metricsMap) {
 
         String namespace    = (String) metricsMap.get("namespace");
         String name         = (String) metricsMap.get("name");
