@@ -169,8 +169,13 @@ class HBaseStoreScan {
 
             long start, end;
             for (TimeRange timeRange : timeRangeSet) {
-                start = timeRange.startTime != null ? timeRange.startTime : Long.MIN_VALUE;
+                start = timeRange.startTime != null ? timeRange.startTime : 0L;
                 end = timeRange.endTime != null ? timeRange.endTime : Long.MAX_VALUE - 1;
+
+                if (end < start){
+                    LOG.warn("Malformed timerange = ({}, {}), skipping...", start, end);
+                    continue;
+                }
 
                 try {
                     s.setTimeRange(start, end);

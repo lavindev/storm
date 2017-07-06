@@ -17,30 +17,16 @@
  */
 package org.apache.storm.metrics2.store;
 
-import java.lang.String;
-
-import java.util.List;
 import org.apache.commons.codec.binary.Hex;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Map;
-import java.io.File;
+import org.rocksdb.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.rocksdb.RocksDB;
-import org.rocksdb.Options;
-import org.rocksdb.ReadOptions;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.RocksIterator;
-import org.rocksdb.BlockBasedTableConfig;
-import org.rocksdb.PlainTableConfig;
-import org.rocksdb.TableFormatConfig;
-import org.rocksdb.IndexType;
-import org.rocksdb.CompactionStyle;
-import org.rocksdb.FlushOptions;
+import java.io.File;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class RocksDBStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(RocksDBStore.class);
@@ -419,13 +405,14 @@ public class RocksDBStore implements MetricStore {
 
     private Set<TimeRange> checkRequiredSettings(Metric possibleKey, HashMap<String, Object> settings)  {
         LOG.debug("Checking metric {} key {}", possibleKey, Hex.encodeHexString(((RocksDBMetric)possibleKey).getKey()));
-        byte aggLevel = ((Integer)settings.get(StringKeywords.aggLevel)).byteValue();
+        Integer aggLevelInt = (Integer) settings.get(StringKeywords.aggLevel);
+        Byte    aggLevel    = (aggLevelInt != null) ? aggLevelInt.byteValue() : (byte) 0;
 
         LOG.info("compare agg level: {} {}", possibleKey.getAggLevel(), aggLevel);
 
         if(settings.containsKey(StringKeywords.aggLevel) && 
                 (possibleKey.getAggLevel() == null ||
-                 !possibleKey.getAggLevel().equals(((Integer)settings.get(StringKeywords.aggLevel)).byteValue()))) {
+                 !possibleKey.getAggLevel().equals(aggLevel))) {
             LOG.info("DOES NOT MATCH agg level: {} {}", possibleKey.getAggLevel(), ((Integer)settings.get(StringKeywords.aggLevel)).byteValue());
             return null;
         } else if(settings.containsKey(StringKeywords.topoId) && 

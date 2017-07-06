@@ -1,9 +1,10 @@
 package org.apache.storm.metrics2.store;
 
+import org.apache.storm.generated.Window;
+
 import java.util.Arrays;
 
 //TODO: this should be an internal enum
-import org.apache.storm.generated.Window;
 
 public class TimeRange {
     public Long startTime;
@@ -23,7 +24,7 @@ public class TimeRange {
     }
 
     public boolean contains(Long time){
-        if ((startTime == null || (startTime != null && time >= startTime)) && 
+        if ((startTime == null || (startTime != null && time >= startTime)) &&
             (endTime == null || (endTime != null && time <= endTime))){
             return true;
         }
