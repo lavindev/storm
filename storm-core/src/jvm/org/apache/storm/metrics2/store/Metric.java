@@ -18,14 +18,12 @@
 
 package org.apache.storm.metrics2.store;
 
-import java.lang.String;
-import java.lang.StringBuilder;
-import java.util.Date;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class Metric {
     private final static Logger LOG = LoggerFactory.getLogger(Metric.class);
@@ -58,7 +56,25 @@ public class Metric {
         this.compIdStr = compId;
         this.topoIdStr = topoIdStr;
         this.stream = stream;
-        this.value = value;
+        this.setValue(value);
+    }
+
+    public Metric(Metric o){
+        this.aggLevel = o.getAggLevel();
+        this.topoIdStr = o.getTopoIdStr();
+        this.timestamp = o.getTimeStamp();
+        this.metricName = o.getMetricName();
+        this.compIdStr = o.getCompName();
+        this.executor = o.getExecutor();
+        this.host = o.getHost();
+        this.port = o.getPort();
+        this.stream = o.getStream();
+
+        this.count = o.getCount();
+        this.value = o.getValue();
+        this.sum = o.getSum();
+        this.min = o.getMin();
+        this.max = o.getMax();
     }
 
     public boolean equals(Object o) {
@@ -94,11 +110,13 @@ public class Metric {
     }
 
     public Double getValue() {
-        if (this.aggLevel == 0) {
-            return this.value;
-        } else {
-            return this.sum;
-        }
+        return this.value;
+        // why?
+//        if (this.aggLevel == 0) {
+//            return this.value;
+//        } else {
+//            return this.sum;
+//        }
     }
 
     public void updateAverage(Double value) {

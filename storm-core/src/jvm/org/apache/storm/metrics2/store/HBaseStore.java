@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -202,7 +202,7 @@ public class HBaseStore implements MetricStore {
         }
 
         try {
-            Get    g      = new Get(key);
+            Get g = new Get(key).setTimeStamp(metric.getTimeStamp());
             Result result = _metricsTable.get(g);
             return _serializer.populateMetricValue(metric, result);
         } catch (IOException e) {
@@ -226,6 +226,7 @@ public class HBaseStore implements MetricStore {
             try {
                 byte[] key = _serializer.createKey(metric);
                 Delete d   = new Delete(key);
+                d.setTimestamp(metric.getTimeStamp());
                 metricsToRemove.add(d);
             } catch (MetricException e) {
                 LOG.error("Could not create key ", e);

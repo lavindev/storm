@@ -31,6 +31,10 @@ public class TimeRange {
         return startTime == null && endTime == null;
     }
 
+    public boolean overlaps(TimeRange other){
+        return contains(other.endTime) || contains(other.startTime);
+    }
+
     public String toString(){
         return "start: " + this.startTime + " end: " + this.endTime + " window: " + this.window;
     }

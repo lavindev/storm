@@ -269,19 +269,21 @@ public class RocksDBSerializer {
 
     public void populate(Metric m, byte[] valueInBytes) {
         if (valueInBytes == null) {
-            m.setCount(0L);
             m.setValue(0.0);
             m.setMin(0.0);
             m.setMax(0.0);
             m.setSum(0.0);
+            m.setCount(0L);
             return;
         }
         ByteBuffer bb = ByteBuffer.wrap(valueInBytes);
-        m.setCount(bb.getLong());
+        // count must be set after setValue()
+        long count = bb.getLong();
         m.setValue(bb.getDouble());
         m.setMin(bb.getDouble());
         m.setMax(bb.getDouble());
         m.setSum(bb.getDouble());
+        m.setCount(count);
     }
 
     public boolean metaInitialized(Metric m) {

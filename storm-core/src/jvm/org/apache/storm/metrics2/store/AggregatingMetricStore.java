@@ -23,8 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-//TODO: this should be an internal enum
-
 public class AggregatingMetricStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(AggregatingMetricStore.class);
     private MetricStore store;
@@ -48,6 +46,16 @@ public class AggregatingMetricStore implements MetricStore {
 
     }
 
+    // testing
+    public List<Integer> getBuckets(){
+        return _buckets;
+    }
+
+    public MetricStore getUnderlyingStore() {
+        return store;
+    }
+    // end testing
+
     public AggregatingMetricStore(MetricStore store) {
         this.store = store;
         _buckets = new ArrayList<>();
@@ -69,7 +77,8 @@ public class AggregatingMetricStore implements MetricStore {
 
         // update aggregates for each bucket
         for (Integer bucket : _buckets) {
-            updateAggregate(metric, bucket);
+            Metric aggMetric = new Metric(metric);
+            updateAggregate(aggMetric, bucket);
         }
     }
 

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -18,8 +18,10 @@
 package org.apache.storm.metrics2.store;
 
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.HBaseTestingUtility;
+import org.apache.hadoop.hbase.HColumnDescriptor;
+import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.storm.generated.Window;
 import org.junit.After;
@@ -117,14 +119,12 @@ public class HBaseStoreTest {
 
         HashMap<String, Object> conf = makeConfig();
         store = new HBaseStore();
-        Configuration hbaseConf = HBaseConfiguration.create();
-
-        testUtil = new HBaseTestingUtility(hbaseConf);
+        testUtil = new HBaseTestingUtility();
 
         try {
             testUtil.startMiniCluster();
             initSchema(conf, testUtil.getHBaseAdmin());
-            // set ZK info from test cluster - not the same as passed in above
+            // set ZK info from test cluster
             int zkPort = testUtil.getZkCluster().getClientPort();
             conf.put("HBaseZookeeperPortOverride", zkPort);
 
@@ -305,9 +305,6 @@ public class HBaseStoreTest {
         store.populateValue(newMetric);
         assertNotEquals(0L, newMetric.getCount());
         assertNotEquals(0.00, newMetric.getValue(), 0.00001);
-        assertNotEquals(0.00, newMetric.getSum(), 0.00001);
-        assertNotEquals(0.00, newMetric.getMin(), 0.00001);
-        assertNotEquals(0.00, newMetric.getMax(), 0.00001);
 
         // check that invalid new metric isn't populated
         newMetric.setTopoIdStr("BAD TOPOLOGY");
