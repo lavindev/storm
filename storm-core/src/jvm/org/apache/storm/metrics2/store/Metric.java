@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -59,7 +59,7 @@ public class Metric {
         this.setValue(value);
     }
 
-    public Metric(Metric o){
+    public Metric(Metric o) {
         this.aggLevel = o.getAggLevel();
         this.topoIdStr = o.getTopoIdStr();
         this.timestamp = o.getTimeStamp();
@@ -71,7 +71,7 @@ public class Metric {
         this.stream = o.getStream();
 
         this.count = o.getCount();
-        this.value = o.getValue();
+        this.value = o.value;
         this.sum = o.getSum();
         this.min = o.getMin();
         this.max = o.getMax();
@@ -79,7 +79,7 @@ public class Metric {
 
     public boolean equals(Object o) {
 
-        if (o.getClass() != Metric.class)
+        if (o instanceof Metric == false)
             return false;
 
         Metric other = (Metric) o;
@@ -110,13 +110,13 @@ public class Metric {
     }
 
     public Double getValue() {
-        return this.value;
+        //return this.value;
         // why?
-//        if (this.aggLevel == 0) {
-//            return this.value;
-//        } else {
-//            return this.sum;
-//        }
+        if (this.aggLevel == 0) {
+            return this.value;
+        } else {
+            return this.sum;
+        }
     }
 
     public void updateAverage(Double value) {
@@ -241,9 +241,9 @@ public class Metric {
     }
 
     public String toString() {
-        StringBuilder x = new StringBuilder();
-        Date date = new Date(this.timestamp);
-        DateFormat format = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        StringBuilder x      = new StringBuilder();
+        Date          date   = new Date(this.timestamp);
+        DateFormat    format = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
         x.append(format.format(date));
         x.append("|");
         x.append(this.topoIdStr);

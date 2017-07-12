@@ -6,6 +6,7 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
+import org.apache.storm.generated.Window;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -98,14 +99,21 @@ public class AggregatingMetricStoreTest {
 
     @AfterClass
     public static void tearDown() {
-
-        File rocksFile = new File(ROCKS_DB_LOCATION);
+        // shutdown HBase utility
         try {
-            FileUtils.deleteDirectory(rocksFile);
-        } catch (IOException e) {
-            LOG.warn("Could not delete temp rocks directory - ", e);
+            hbaseTestingUtility.shutdownMiniCluster();
+        } catch (Exception e) {
+            LOG.error("Could not tear down HBase cluster - ", e);
+            fail();
         }
 
+        // delete tmp RocksDB
+        try {
+            File tmpRocksDB = FileUtils.getTempDirectory();
+            FileUtils.deleteDirectory(tmpRocksDB);
+        } catch (IOException e) {
+            LOG.error("Could not delete tmp RocksDB directory - ", e);
+        }
     }
 
     public AggregatingMetricStoreTest(StoreType type) {
@@ -131,8 +139,9 @@ public class AggregatingMetricStoreTest {
 
         switch (type) {
             case ROCKSDB:
+                String tmpRocksDB = FileUtils.getTempDirectoryPath();
                 conf.put("storm.metrics2.store.rocksdb.create_if_missing", true);
-                conf.put("storm.metrics2.store.rocksdb.location", ROCKS_DB_LOCATION);
+                conf.put("storm.metrics2.store.rocksdb.location", tmpRocksDB);
                 conf.put("storm.metrics2.store.rocksdb.retention", 1);
                 conf.put("storm.metrics2.store.rocksdb.retention.units", "MINUTES");
                 break;
@@ -205,14 +214,14 @@ public class AggregatingMetricStoreTest {
 
     private void assertAggregationsExist(Metric m) {
 
-        Metric        aggMetric = new Metric(m);
-        List<Integer> buckets   = store.getBuckets();
+        Metric     aggMetric = new Metric(m);
+        List<Long> buckets   = store.getBuckets();
 
-        for (Integer bucket : buckets) {
+        for (Long bucket : buckets) {
             aggMetric.setValue(0.00);
             aggMetric.setCount(0L);
 
-            long msToBucket      = 1000 * 60 * bucket;
+            long msToBucket      = 1000L * 60L * bucket;
             Long roundedToBucket = msToBucket * (m.getTimeStamp() / msToBucket);
 
             aggMetric.setAggLevel(bucket.byteValue());
@@ -256,14 +265,14 @@ public class AggregatingMetricStoreTest {
         assertMetricExists(m2);
         assertAggregationsExist(m2);
 
-        Metric        aggMetric = new Metric(m1);
-        List<Integer> buckets   = store.getBuckets();
+        Metric     aggMetric = new Metric(m1);
+        List<Long> buckets   = store.getBuckets();
 
-        for (Integer bucket : buckets) {
+        for (Long bucket : buckets) {
             aggMetric.setCount(0L);
             aggMetric.setValue(0.00);
 
-            long msToBucket      = 1000 * 60 * bucket;
+            long msToBucket      = 1000L * 60L * bucket;
             Long roundedToBucket = msToBucket * (ts / msToBucket);
 
             aggMetric.setAggLevel(bucket.byteValue());
@@ -272,7 +281,7 @@ public class AggregatingMetricStoreTest {
             underlyingStore.populateValue(aggMetric);
 
             assertEquals(2L, aggMetric.getCount());
-            assertEquals((value1 + value2) / 2, aggMetric.getValue(), 0.0001);
+            assertEquals((value1 + value2), aggMetric.getValue(), 0.0001);
             assertEquals(value1 + value2, aggMetric.getSum(), 0.0001);
             assertEquals(Math.min(value1, value2), aggMetric.getMin(), 0.0001);
             assertEquals(Math.max(value1, value2), aggMetric.getMax(), 0.0001);
@@ -308,22 +317,23 @@ public class AggregatingMetricStoreTest {
         settings.put(StringKeywords.aggLevel, 0);
         settings.put(StringKeywords.topoId, topoId);
 
+        TimeRange          timeRangeAll = new TimeRange(100L, 100L + COUNT, Window.ALL);
+        HashSet<TimeRange> timeRangeSet = new HashSet<>();
+        timeRangeSet.add(timeRangeAll);
+        settings.put(StringKeywords.timeRangeSet, timeRangeSet);
         // insert metrics
         for (int i = 0; i < COUNT; ++i) {
-            Metric m = makeMetric(i * 456);
+            Metric m = makeMetric(100 + i);
             m.setTopoIdStr(topoId);
             underlyingStore.insert(m);
             metricsInserted.add(m);
         }
 
-        // scan for inserted metrics, check that we have all inserted
-        underlyingStore.scan(settings, (metric, timerange) -> {
-            metricsRetrieved.add(metric);
-        });
 
+        // scan for inserted metrics, check that we have all inserted
+        store.scan(settings, (metric, timeRange) -> metricsRetrieved.add(metric));
         boolean containsAll = metricsRetrieved.containsAll(metricsInserted);
         assertTrue(containsAll);
-
     }
 
     @Test
@@ -339,9 +349,14 @@ public class AggregatingMetricStoreTest {
         settings.put(StringKeywords.aggLevel, 0);
         settings.put(StringKeywords.topoId, topoId);
 
+        TimeRange          timeRangeAll = new TimeRange(200L, 200L + COUNT, Window.ALL);
+        HashSet<TimeRange> timeRangeSet = new HashSet<>();
+        timeRangeSet.add(timeRangeAll);
+        settings.put(StringKeywords.timeRangeSet, timeRangeSet);
+
         // insert metrics
         for (int i = 0; i < COUNT; ++i) {
-            Metric m = makeMetric(i * 456);
+            Metric m = makeMetric(200 + i);
             m.setTopoIdStr(topoId);
             underlyingStore.insert(m);
             metricsInserted.add(m);

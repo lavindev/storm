@@ -27,7 +27,7 @@ public class AggregatingMetricStore implements MetricStore {
     private final static Logger LOG = LoggerFactory.getLogger(AggregatingMetricStore.class);
     private MetricStore store;
 
-    private List<Integer> _buckets;
+    private List<Long> _buckets;
 
     private class BucketInfo {
         // NOTE: roundedEndTime <= endTime && roundedStartTime <= startTime
@@ -37,17 +37,21 @@ public class AggregatingMetricStore implements MetricStore {
         long roundedStartTime;
         long roundedEndTime;
 
-        BucketInfo(TimeRange t, int resolution) {
+        BucketInfo(TimeRange t, long resolution) {
             startTime = (t.startTime != null) ? t.startTime : 0L;
             endTime = (t.endTime != null) ? t.endTime : System.currentTimeMillis();
-            roundedEndTime = resolution * (endTime / resolution);
-            roundedStartTime = resolution * (startTime / resolution);
+            roundedEndTime = resolution * ((endTime - (resolution - 1L)) / resolution);
+            roundedStartTime = resolution * ((startTime + (resolution - 1L)) / resolution);
+        }
+
+        public String toString() {
+            return "(" + startTime + ", " + roundedStartTime + ", " + roundedEndTime + ", " + endTime + ")" + ((roundedEndTime <= roundedStartTime) ? " BAD" : " OK");
         }
 
     }
 
     // testing
-    public List<Integer> getBuckets(){
+    public List<Long> getBuckets() {
         return _buckets;
     }
 
@@ -59,9 +63,9 @@ public class AggregatingMetricStore implements MetricStore {
     public AggregatingMetricStore(MetricStore store) {
         this.store = store;
         _buckets = new ArrayList<>();
-        _buckets.add(60); // 60 minutes
-        _buckets.add(10); // 10 minutes
-        _buckets.add(1);  // 1 minutes
+        _buckets.add(60L); // 60 minutes
+        _buckets.add(10L); // 10 minutes
+        _buckets.add(1L);  // 1 minutes
     }
 
     @Override
@@ -76,33 +80,33 @@ public class AggregatingMetricStore implements MetricStore {
         store.insert(metric);
 
         // update aggregates for each bucket
-        for (Integer bucket : _buckets) {
-            Metric aggMetric = new Metric(metric);
-            updateAggregate(aggMetric, bucket);
+        for (Long bucket : _buckets) {
+            updateAggregate(metric, bucket);
         }
     }
 
-    private void updateAggregate(Metric m, Integer bucket) {
+    private void updateAggregate(Metric m, Long bucket) {
 
-        Long   metricTimestamp = m.getTimeStamp();
-        Double metricValue     = m.getValue();
+        Metric aggMetric       = new Metric(m);
+        Long   metricTimestamp = aggMetric.getTimeStamp();
+        Double metricValue     = aggMetric.getValue();
 
         long msToBucket      = 1000 * 60 * bucket;
         Long roundedToBucket = msToBucket * (metricTimestamp / msToBucket);
 
         // set new key
-        m.setAggLevel(bucket.byteValue());
-        m.setTimeStamp(roundedToBucket);
+        aggMetric.setAggLevel(bucket.byteValue());
+        aggMetric.setTimeStamp(roundedToBucket);
 
         // retrieve existing aggregation
-        if (store.populateValue(m))
-            m.updateAverage(metricValue);
+        if (store.populateValue(aggMetric))
+            aggMetric.updateAverage(metricValue);
         else
-            m.setValue(metricValue);
+            aggMetric.setValue(metricValue);
 
         // insert updated metric
-        LOG.debug("inserting {} min bucket {}", m, bucket);
-        store.insert(m);
+        LOG.debug("inserting {} min bucket {}", aggMetric, bucket);
+        store.insert(aggMetric);
     }
 
     @Override
@@ -110,51 +114,63 @@ public class AggregatingMetricStore implements MetricStore {
         store.scan(agg);
     }
 
-    private Integer getBucket(int i) {
-        return i < _buckets.size() ? _buckets.get(i) : 0;
+    private Long getBucket(int i, TimeRange t) {
+
+        Long res;
+        long startTime = (t.startTime != null) ? t.startTime : 0L;
+        long endTime   = (t.endTime != null) ? t.endTime : System.currentTimeMillis();
+        long timeDelta = endTime - startTime;
+
+        do {
+            res = (i < _buckets.size()) ? _buckets.get(i) : 0L;
+            ++i;
+        } while (res * 60L * 1000L > timeDelta && timeDelta > 0);
+
+        return res;
     }
 
     private void _scan(HashMap<String, Object> settings, IAggregator agg, TimeRange t, int bucketsIdx) {
-
-        Integer res = getBucket(bucketsIdx);
+        // TODO: clean up control flow
+        //LOG.info("idx before = {}", bucketsIdx);
+        Long               res     = getBucket(bucketsIdx, t);
+        HashSet<TimeRange> timeSet = new HashSet<TimeRange>();
 
         LOG.info("At _scan buckets with {} {} {} {}", settings, agg, t, res);
+        LOG.info("Res = {}, idx = {}, timedelta = {}", res, bucketsIdx, t.endTime - t.startTime);
 
         if (res == 0) {
-            HashSet<TimeRange> timeSet = new HashSet<>();
             timeSet.add(t);
-
             settings.put(StringKeywords.timeRangeSet, timeSet);
             settings.put(StringKeywords.aggLevel, 0);
-
             store.scan(settings, agg);
-
         } else {
 
-            int        resMs      = 1000 * 60 * res;
+            long       resMs      = 1000L * 60L * res;
             BucketInfo bucketInfo = new BucketInfo(t, resMs);
 
             // can the head be subdivided?
             if (bucketInfo.startTime != bucketInfo.roundedStartTime) {
-                TimeRange thead = new TimeRange(bucketInfo.roundedStartTime, bucketInfo.startTime, t.window);
+                TimeRange thead = new TimeRange(bucketInfo.startTime, bucketInfo.roundedStartTime - 1L, t.window);
                 _scan(settings, agg, thead, bucketsIdx + 1);
             }
 
             // did we find buckets for the body? If so, go ahead and scan
-            TimeRange          tbody   = new TimeRange(bucketInfo.roundedStartTime, bucketInfo.roundedEndTime, t.window);
-            HashSet<TimeRange> timeSet = new HashSet<>();
-            timeSet.add(tbody);
-
-            settings.put(StringKeywords.timeRangeSet, timeSet);
-            settings.put(StringKeywords.aggLevel, res);
-            store.scan(settings, agg);
+            if (t.endTime <= t.startTime) {
+                TimeRange tbody = new TimeRange(bucketInfo.roundedStartTime, bucketInfo.roundedEndTime, t.window);
+                timeSet.add(tbody);
+                settings.put(StringKeywords.timeRangeSet, timeSet);
+                settings.put(StringKeywords.aggLevel, res.intValue());
+                store.scan(settings, agg);
+            }
 
             // can the tail be subdivided?
             if (bucketInfo.roundedEndTime != bucketInfo.endTime) {
-                TimeRange ttail = new TimeRange(bucketInfo.roundedEndTime, bucketInfo.endTime, t.window);
+                TimeRange ttail = new TimeRange(bucketInfo.roundedEndTime + 1L, bucketInfo.endTime, t.window);
                 _scan(settings, agg, ttail, bucketsIdx + 1);
             }
+
         }
+
     }
 
     @Override
