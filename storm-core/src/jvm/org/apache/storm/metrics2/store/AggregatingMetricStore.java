@@ -44,10 +44,6 @@ public class AggregatingMetricStore implements MetricStore {
             roundedStartTime = resolution * ((startTime + (resolution - 1L)) / resolution);
         }
 
-        public String toString() {
-            return "(" + startTime + ", " + roundedStartTime + ", " + roundedEndTime + ", " + endTime + ")" + ((roundedEndTime <= roundedStartTime) ? " BAD" : " OK");
-        }
-
     }
 
     // testing
