@@ -130,13 +130,11 @@ public class AggregatingMetricStore implements MetricStore {
     }
 
     private void _scan(HashMap<String, Object> settings, IAggregator agg, TimeRange t, int bucketsIdx) {
-        // TODO: clean up control flow
-        //LOG.info("idx before = {}", bucketsIdx);
+
         Long               res     = getBucket(bucketsIdx, t);
         HashSet<TimeRange> timeSet = new HashSet<TimeRange>();
 
         LOG.info("At _scan buckets with {} {} {} {}", settings, agg, t, res);
-        LOG.info("Res = {}, idx = {}, timedelta = {}", res, bucketsIdx, t.endTime - t.startTime);
 
         if (res == 0) {
             timeSet.add(t);
@@ -168,7 +166,6 @@ public class AggregatingMetricStore implements MetricStore {
                 TimeRange ttail = new TimeRange(bucketInfo.roundedEndTime + 1L, bucketInfo.endTime, t.window);
                 _scan(settings, agg, ttail, bucketsIdx + 1);
             }
-
         }
 
     }
