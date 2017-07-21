@@ -24,8 +24,6 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.HashSet;
 
-//TODO: this should be an internal enum
-
 public class Aggregation {
     private final static Logger LOG = LoggerFactory.getLogger(Aggregation.class);
 
