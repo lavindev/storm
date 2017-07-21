@@ -33,7 +33,7 @@
         <worker-launcher.conf.dir>/etc/storm</worker-launcher.conf.dir>
         <worker-launcher.additional_cflags></worker-launcher.additional_cflags>
         <argLine></argLine>
-        <hbase.version>0.98.7-hadoop2</hbase.version>
+        <hbase.version>0.98.7.27.1704072016_h2</hbase.version>
         <hdfs.version>${hadoop.version}</hdfs.version>
     </properties>
 
@@ -57,7 +57,7 @@
         <dependency>
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-testing-util</artifactId>
-            <version>${hbase.version}</version>
+            <version>0.98.7-hadoop2</version>
             <scope>test</scope>
             <type>test-jar</type>
             <exclusions>
