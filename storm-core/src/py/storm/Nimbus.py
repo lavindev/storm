@@ -5154,11 +5154,11 @@ class getComponentPendingProfileActions_result:
       if fid == 0:
         if ftype == TType.LIST:
           self.success = []
-          (_etype788, _size785) = iprot.readListBegin()
-          for _i789 in xrange(_size785):
-            _elem790 = ProfileRequest()
-            _elem790.read(iprot)
-            self.success.append(_elem790)
+          (_etype867, _size864) = iprot.readListBegin()
+          for _i868 in xrange(_size864):
+            _elem869 = ProfileRequest()
+            _elem869.read(iprot)
+            self.success.append(_elem869)
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
@@ -5175,8 +5175,8 @@ class getComponentPendingProfileActions_result:
     if self.success is not None:
       oprot.writeFieldBegin('success', TType.LIST, 0)
       oprot.writeListBegin(TType.STRUCT, len(self.success))
-      for iter791 in self.success:
-        iter791.write(oprot)
+      for iter870 in self.success:
+        iter870.write(oprot)
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()

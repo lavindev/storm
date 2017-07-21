@@ -75,6 +75,9 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import com.codahale.metrics.Metric;
+import com.codahale.metrics.jvm.MemoryUsageGaugeSet;
+
 public class WorkerState {
 
     private static final Logger LOG = LoggerFactory.getLogger(WorkerState.class);
@@ -336,6 +339,15 @@ public class WorkerState {
         this.metricRegistry = new StormMetricRegistry(new ArrayList<String>());
         reporterConfig = new MetricReporterConfig(this.metricRegistry, DaemonType.WORKER, workerId);
         reporterConfig.configure(conf);
+
+        // register default metrics for the worker
+        MemoryUsageGaugeSet memorySet = new MemoryUsageGaugeSet();
+        for (Map.Entry<String, Metric> metric : memorySet.getMetrics().entrySet()){
+            //TODO: shouldn't need any of this string replacement
+            //TODO: maybe the db is aware of the metric daemon
+            String fqMeterName = this.metricRegistry.scopedName("[0-0]", "__all", "__worker", "memory-" + metric.getKey().replace('.', '-'));
+            this.metricRegistry.register(fqMeterName, metric.getValue());
+        }
     }
 
     public void stopMetricReporters() {

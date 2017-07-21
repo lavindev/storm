@@ -34,6 +34,39 @@ import org.apache.storm.cluster.DaemonType;
 import org.apache.storm.metrics2.reporters.PreparableReporter;
 import org.apache.storm.utils.Utils;
 
+/*
+
+Example config:
+
+storm.metrics.reporters:
+    "graphite":
+        class: "org.apache.storm.metrics2.reporters.GraphitePreparableReporter"
+        daemons: 
+            - "supervisor"
+            - "nimbus"
+            - "worker"
+        schedule.period: 60
+        schedule.period.units: "SECONDS"
+        target.host: "localhost"
+        target.port: 2003
+
+    "default":
+        class: "org.apache.storm.metrics2.reporters.StormPreparableReporter"
+        daemons: 
+            - "worker"
+        schedule.period: 30
+        schedule.period.units: "SECONDS"
+        rate.units: "SECONDS"
+        duration.units: "SECONDS"
+
+        #TODO: not funtional, but you get the idea
+        filters:
+            "org.apache.storm.metrics2.filters.RegexFilter":
+                expression: ".*my_component.*emitted.*"
+
+
+*/
+
 public class MetricReporterConfig {
 
     private static final Logger LOG = LoggerFactory.getLogger(MetricReporterConfig.class);

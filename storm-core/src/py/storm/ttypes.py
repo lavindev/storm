@@ -161,12 +161,14 @@ class StatsStoreOperation:
   AVG = 1
   MIN = 2
   MAX = 3
+  SERIES = 4
 
   _VALUES_TO_NAMES = {
     0: "SUM",
     1: "AVG",
     2: "MIN",
     3: "MAX",
+    4: "SERIES",
   }
 
   _NAMES_TO_VALUES = {
@@ -174,6 +176,7 @@ class StatsStoreOperation:
     "AVG": 1,
     "MIN": 2,
     "MAX": 3,
+    "SERIES": 4,
   }
 
 class Window:
@@ -194,6 +197,23 @@ class Window:
     "TEN_MIN": 1,
     "THREE_HR": 2,
     "ONE_DAY": 3,
+  }
+
+class AggLevel:
+  RAW = 0
+  TEN_MIN = 1
+  HOUR = 2
+
+  _VALUES_TO_NAMES = {
+    0: "RAW",
+    1: "TEN_MIN",
+    2: "HOUR",
+  }
+
+  _NAMES_TO_VALUES = {
+    "RAW": 0,
+    "TEN_MIN": 1,
+    "HOUR": 2,
   }
 
 class HBServerMessageType:
@@ -11279,6 +11299,9 @@ class StatsSpec:
    - component
    - executor_id
    - metrics
+   - start_time_sec
+   - end_time_sec
+   - min_agg_level
   """
 
   thrift_spec = (
@@ -11289,15 +11312,21 @@ class StatsSpec:
     (4, TType.STRING, 'component', None, None, ), # 4
     (5, TType.STRING, 'executor_id', None, None, ), # 5
     (6, TType.LIST, 'metrics', (TType.STRING,None), None, ), # 6
+    (7, TType.I64, 'start_time_sec', None, None, ), # 7
+    (8, TType.I64, 'end_time_sec', None, None, ), # 8
+    (9, TType.I32, 'min_agg_level', None, None, ), # 9
   )
 
-  def __init__(self, op=thrift_spec[1][4], windows=None, topology_id=None, component=None, executor_id=None, metrics=None,):
+  def __init__(self, op=thrift_spec[1][4], windows=None, topology_id=None, component=None, executor_id=None, metrics=None, start_time_sec=None, end_time_sec=None, min_agg_level=None,):
     self.op = op
     self.windows = windows
     self.topology_id = topology_id
     self.component = component
     self.executor_id = executor_id
     self.metrics = metrics
+    self.start_time_sec = start_time_sec
+    self.end_time_sec = end_time_sec
+    self.min_agg_level = min_agg_level
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -11348,6 +11377,21 @@ class StatsSpec:
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
+      elif fid == 7:
+        if ftype == TType.I64:
+          self.start_time_sec = iprot.readI64()
+        else:
+          iprot.skip(ftype)
+      elif fid == 8:
+        if ftype == TType.I64:
+          self.end_time_sec = iprot.readI64()
+        else:
+          iprot.skip(ftype)
+      elif fid == 9:
+        if ftype == TType.I32:
+          self.min_agg_level = iprot.readI32()
+        else:
+          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -11388,6 +11432,18 @@ class StatsSpec:
         oprot.writeString(iter754.encode('utf-8'))
       oprot.writeListEnd()
       oprot.writeFieldEnd()
+    if self.start_time_sec is not None:
+      oprot.writeFieldBegin('start_time_sec', TType.I64, 7)
+      oprot.writeI64(self.start_time_sec)
+      oprot.writeFieldEnd()
+    if self.end_time_sec is not None:
+      oprot.writeFieldBegin('end_time_sec', TType.I64, 8)
+      oprot.writeI64(self.end_time_sec)
+      oprot.writeFieldEnd()
+    if self.min_agg_level is not None:
+      oprot.writeFieldBegin('min_agg_level', TType.I32, 9)
+      oprot.writeI32(self.min_agg_level)
+      oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
 
@@ -11403,6 +11459,9 @@ class StatsSpec:
     value = (value * 31) ^ hash(self.component)
     value = (value * 31) ^ hash(self.executor_id)
     value = (value * 31) ^ hash(self.metrics)
+    value = (value * 31) ^ hash(self.start_time_sec)
+    value = (value * 31) ^ hash(self.end_time_sec)
+    value = (value * 31) ^ hash(self.min_agg_level)
     return value
 
   def __repr__(self):
@@ -11543,19 +11602,128 @@ class StormWindowedStats:
   def __ne__(self, other):
     return not (self == other)
 
+class StormSeriesStats:
+  """
+  Attributes:
+   - times
+   - values
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.LIST, 'times', (TType.I64,None), None, ), # 1
+    (2, TType.MAP, 'values', (TType.STRING,None,TType.MAP,(TType.I64,None,TType.DOUBLE,None)), None, ), # 2
+  )
+
+  def __init__(self, times=None, values=None,):
+    self.times = times
+    self.values = values
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.LIST:
+          self.times = []
+          (_etype767, _size764) = iprot.readListBegin()
+          for _i768 in xrange(_size764):
+            _elem769 = iprot.readI64()
+            self.times.append(_elem769)
+          iprot.readListEnd()
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.MAP:
+          self.values = {}
+          (_ktype771, _vtype772, _size770 ) = iprot.readMapBegin()
+          for _i774 in xrange(_size770):
+            _key775 = iprot.readString().decode('utf-8')
+            _val776 = {}
+            (_ktype778, _vtype779, _size777 ) = iprot.readMapBegin()
+            for _i781 in xrange(_size777):
+              _key782 = iprot.readI64()
+              _val783 = iprot.readDouble()
+              _val776[_key782] = _val783
+            iprot.readMapEnd()
+            self.values[_key775] = _val776
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('StormSeriesStats')
+    if self.times is not None:
+      oprot.writeFieldBegin('times', TType.LIST, 1)
+      oprot.writeListBegin(TType.I64, len(self.times))
+      for iter784 in self.times:
+        oprot.writeI64(iter784)
+      oprot.writeListEnd()
+      oprot.writeFieldEnd()
+    if self.values is not None:
+      oprot.writeFieldBegin('values', TType.MAP, 2)
+      oprot.writeMapBegin(TType.STRING, TType.MAP, len(self.values))
+      for kiter785,viter786 in self.values.items():
+        oprot.writeString(kiter785.encode('utf-8'))
+        oprot.writeMapBegin(TType.I64, TType.DOUBLE, len(viter786))
+        for kiter787,viter788 in viter786.items():
+          oprot.writeI64(kiter787)
+          oprot.writeDouble(viter788)
+        oprot.writeMapEnd()
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __hash__(self):
+    value = 17
+    value = (value * 31) ^ hash(self.times)
+    value = (value * 31) ^ hash(self.values)
+    return value
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
 class StormStats:
   """
   Attributes:
    - windowed_stats
+   - series_stats
   """
 
   thrift_spec = (
     None, # 0
     (1, TType.LIST, 'windowed_stats', (TType.STRUCT,(StormWindowedStats, StormWindowedStats.thrift_spec)), None, ), # 1
+    (2, TType.STRUCT, 'series_stats', (StormSeriesStats, StormSeriesStats.thrift_spec), None, ), # 2
   )
 
-  def __init__(self, windowed_stats=None,):
+  def __init__(self, windowed_stats=None, series_stats=None,):
     self.windowed_stats = windowed_stats
+    self.series_stats = series_stats
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -11569,12 +11737,18 @@ class StormStats:
       if fid == 1:
         if ftype == TType.LIST:
           self.windowed_stats = []
-          (_etype767, _size764) = iprot.readListBegin()
-          for _i768 in xrange(_size764):
-            _elem769 = StormWindowedStats()
-            _elem769.read(iprot)
-            self.windowed_stats.append(_elem769)
+          (_etype792, _size789) = iprot.readListBegin()
+          for _i793 in xrange(_size789):
+            _elem794 = StormWindowedStats()
+            _elem794.read(iprot)
+            self.windowed_stats.append(_elem794)
           iprot.readListEnd()
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.STRUCT:
+          self.series_stats = StormSeriesStats()
+          self.series_stats.read(iprot)
         else:
           iprot.skip(ftype)
       else:
@@ -11590,9 +11764,13 @@ class StormStats:
     if self.windowed_stats is not None:
       oprot.writeFieldBegin('windowed_stats', TType.LIST, 1)
       oprot.writeListBegin(TType.STRUCT, len(self.windowed_stats))
-      for iter770 in self.windowed_stats:
-        iter770.write(oprot)
+      for iter795 in self.windowed_stats:
+        iter795.write(oprot)
       oprot.writeListEnd()
+      oprot.writeFieldEnd()
+    if self.series_stats is not None:
+      oprot.writeFieldBegin('series_stats', TType.STRUCT, 2)
+      self.series_stats.write(oprot)
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
@@ -11604,6 +11782,7 @@ class StormStats:
   def __hash__(self):
     value = 17
     value = (value * 31) ^ hash(self.windowed_stats)
+    value = (value * 31) ^ hash(self.series_stats)
     return value
 
   def __repr__(self):
@@ -11875,11 +12054,11 @@ class HBRecords:
       if fid == 1:
         if ftype == TType.LIST:
           self.pulses = []
-          (_etype774, _size771) = iprot.readListBegin()
-          for _i775 in xrange(_size771):
-            _elem776 = HBPulse()
-            _elem776.read(iprot)
-            self.pulses.append(_elem776)
+          (_etype799, _size796) = iprot.readListBegin()
+          for _i800 in xrange(_size796):
+            _elem801 = HBPulse()
+            _elem801.read(iprot)
+            self.pulses.append(_elem801)
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
@@ -11896,8 +12075,8 @@ class HBRecords:
     if self.pulses is not None:
       oprot.writeFieldBegin('pulses', TType.LIST, 1)
       oprot.writeListBegin(TType.STRUCT, len(self.pulses))
-      for iter777 in self.pulses:
-        iter777.write(oprot)
+      for iter802 in self.pulses:
+        iter802.write(oprot)
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
@@ -11949,10 +12128,10 @@ class HBNodes:
       if fid == 1:
         if ftype == TType.LIST:
           self.pulseIds = []
-          (_etype781, _size778) = iprot.readListBegin()
-          for _i782 in xrange(_size778):
-            _elem783 = iprot.readString().decode('utf-8')
-            self.pulseIds.append(_elem783)
+          (_etype806, _size803) = iprot.readListBegin()
+          for _i807 in xrange(_size803):
+            _elem808 = iprot.readString().decode('utf-8')
+            self.pulseIds.append(_elem808)
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
@@ -11969,8 +12148,8 @@ class HBNodes:
     if self.pulseIds is not None:
       oprot.writeFieldBegin('pulseIds', TType.LIST, 1)
       oprot.writeListBegin(TType.STRING, len(self.pulseIds))
-      for iter784 in self.pulseIds:
-        oprot.writeString(iter784.encode('utf-8'))
+      for iter809 in self.pulseIds:
+        oprot.writeString(iter809.encode('utf-8'))
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
@@ -12349,6 +12528,250 @@ class HBExecutionException(TException):
   def __hash__(self):
     value = 17
     value = (value * 31) ^ hash(self.msg)
+    return value
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class StatsMetadataTopo:
+  """
+  Attributes:
+   - topo_ids
+   - stream_ids
+   - host_ids
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.MAP, 'topo_ids', (TType.STRING,None,TType.I32,None), None, ), # 1
+    (2, TType.MAP, 'stream_ids', (TType.STRING,None,TType.I32,None), None, ), # 2
+    (3, TType.MAP, 'host_ids', (TType.STRING,None,TType.I32,None), None, ), # 3
+  )
+
+  def __init__(self, topo_ids=None, stream_ids=None, host_ids=None,):
+    self.topo_ids = topo_ids
+    self.stream_ids = stream_ids
+    self.host_ids = host_ids
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.MAP:
+          self.topo_ids = {}
+          (_ktype811, _vtype812, _size810 ) = iprot.readMapBegin()
+          for _i814 in xrange(_size810):
+            _key815 = iprot.readString().decode('utf-8')
+            _val816 = iprot.readI32()
+            self.topo_ids[_key815] = _val816
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.MAP:
+          self.stream_ids = {}
+          (_ktype818, _vtype819, _size817 ) = iprot.readMapBegin()
+          for _i821 in xrange(_size817):
+            _key822 = iprot.readString().decode('utf-8')
+            _val823 = iprot.readI32()
+            self.stream_ids[_key822] = _val823
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      elif fid == 3:
+        if ftype == TType.MAP:
+          self.host_ids = {}
+          (_ktype825, _vtype826, _size824 ) = iprot.readMapBegin()
+          for _i828 in xrange(_size824):
+            _key829 = iprot.readString().decode('utf-8')
+            _val830 = iprot.readI32()
+            self.host_ids[_key829] = _val830
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('StatsMetadataTopo')
+    if self.topo_ids is not None:
+      oprot.writeFieldBegin('topo_ids', TType.MAP, 1)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.topo_ids))
+      for kiter831,viter832 in self.topo_ids.items():
+        oprot.writeString(kiter831.encode('utf-8'))
+        oprot.writeI32(viter832)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    if self.stream_ids is not None:
+      oprot.writeFieldBegin('stream_ids', TType.MAP, 2)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.stream_ids))
+      for kiter833,viter834 in self.stream_ids.items():
+        oprot.writeString(kiter833.encode('utf-8'))
+        oprot.writeI32(viter834)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    if self.host_ids is not None:
+      oprot.writeFieldBegin('host_ids', TType.MAP, 3)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.host_ids))
+      for kiter835,viter836 in self.host_ids.items():
+        oprot.writeString(kiter835.encode('utf-8'))
+        oprot.writeI32(viter836)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __hash__(self):
+    value = 17
+    value = (value * 31) ^ hash(self.topo_ids)
+    value = (value * 31) ^ hash(self.stream_ids)
+    value = (value * 31) ^ hash(self.host_ids)
+    return value
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class StatsMetadata:
+  """
+  Attributes:
+   - comp_ids
+   - metric_ids
+   - executor_ids
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.MAP, 'comp_ids', (TType.STRING,None,TType.I32,None), None, ), # 1
+    (2, TType.MAP, 'metric_ids', (TType.STRING,None,TType.I32,None), None, ), # 2
+    None, # 3
+    None, # 4
+    (5, TType.MAP, 'executor_ids', (TType.STRING,None,TType.I32,None), None, ), # 5
+  )
+
+  def __init__(self, comp_ids=None, metric_ids=None, executor_ids=None,):
+    self.comp_ids = comp_ids
+    self.metric_ids = metric_ids
+    self.executor_ids = executor_ids
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.MAP:
+          self.comp_ids = {}
+          (_ktype838, _vtype839, _size837 ) = iprot.readMapBegin()
+          for _i841 in xrange(_size837):
+            _key842 = iprot.readString().decode('utf-8')
+            _val843 = iprot.readI32()
+            self.comp_ids[_key842] = _val843
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.MAP:
+          self.metric_ids = {}
+          (_ktype845, _vtype846, _size844 ) = iprot.readMapBegin()
+          for _i848 in xrange(_size844):
+            _key849 = iprot.readString().decode('utf-8')
+            _val850 = iprot.readI32()
+            self.metric_ids[_key849] = _val850
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      elif fid == 5:
+        if ftype == TType.MAP:
+          self.executor_ids = {}
+          (_ktype852, _vtype853, _size851 ) = iprot.readMapBegin()
+          for _i855 in xrange(_size851):
+            _key856 = iprot.readString().decode('utf-8')
+            _val857 = iprot.readI32()
+            self.executor_ids[_key856] = _val857
+          iprot.readMapEnd()
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('StatsMetadata')
+    if self.comp_ids is not None:
+      oprot.writeFieldBegin('comp_ids', TType.MAP, 1)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.comp_ids))
+      for kiter858,viter859 in self.comp_ids.items():
+        oprot.writeString(kiter858.encode('utf-8'))
+        oprot.writeI32(viter859)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    if self.metric_ids is not None:
+      oprot.writeFieldBegin('metric_ids', TType.MAP, 2)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.metric_ids))
+      for kiter860,viter861 in self.metric_ids.items():
+        oprot.writeString(kiter860.encode('utf-8'))
+        oprot.writeI32(viter861)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    if self.executor_ids is not None:
+      oprot.writeFieldBegin('executor_ids', TType.MAP, 5)
+      oprot.writeMapBegin(TType.STRING, TType.I32, len(self.executor_ids))
+      for kiter862,viter863 in self.executor_ids.items():
+        oprot.writeString(kiter862.encode('utf-8'))
+        oprot.writeI32(viter863)
+      oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __hash__(self):
+    value = 17
+    value = (value * 31) ^ hash(self.comp_ids)
+    value = (value * 31) ^ hash(self.metric_ids)
+    value = (value * 31) ^ hash(self.executor_ids)
     return value
 
   def __repr__(self):

@@ -23,10 +23,14 @@ import org.apache.storm.utils.Utils;
 import org.apache.storm.generated.LSWorkerStats;
 import org.apache.storm.generated.SupervisorWorkerStats;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 
 public class StatsPusher {
+    private static final Logger LOG = LoggerFactory.getLogger(StatsPusher.class);
 
     NimbusClient client = null;
     private int bufferSize = 4096;
@@ -44,10 +48,12 @@ public class StatsPusher {
     }
 
     public void sendWorkerStatsToNimbus(SupervisorWorkerStats sws) {
+        LOG.info("Pushing the stats {}", sws);
         try {
             this.client.getClient().consumeWorkerStats(sws);
         } catch (org.apache.thrift.TException ex) {
-            System.out.println("ayayay!!" + ex);
+            // TODO: recreate client if the connection was dropped
+            LOG.error("Error submitting stats to supervisor", ex);
         }
     }
 }

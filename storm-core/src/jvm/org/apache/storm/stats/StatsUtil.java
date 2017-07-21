@@ -1401,7 +1401,6 @@ public class StatsUtil {
                     convertZkExecutorHb(executorBeat));
         }
 
-        System.out.println ("convertExecutorBeats:" + ret);
         return ret;
     }
 

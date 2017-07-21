@@ -18,65 +18,87 @@
 
 package org.apache.storm.metrics2.store;
 
-import java.lang.String;
-import java.lang.StringBuilder;
-import java.util.Map;
-import java.util.List;
-import java.util.Set;
-import java.nio.ByteBuffer;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class Metric {
     private final static Logger LOG = LoggerFactory.getLogger(Metric.class);
 
+    private String owner;
     private String metricName;
-    private String topoId;
+    private String topoIdStr;
     private String host;
-    private int port;
-    private String compId;
-    private Long timestamp;
-
+    private long port = 0;
+    private String compIdStr;
+    private long timestamp = 0;
     private String executor;
-    private String dimensions;
     private String stream;
-    private String key;
 
     private long count = 1L;
     private double value = 0.0;
     private double sum = 0.0;
     private double min = 0.0;
     private double max = 0.0;
-    private String aggLevel = "rt";
-    private static String[] prefixOrder = {
-        StringKeywords.timeStart,
-        StringKeywords.topoId, 
-        StringKeywords.aggLevel,
-        StringKeywords.metricName
-    };/*
-        StringKeywords.component, 
-        StringKeywords.executor, 
-        StringKeywords.host,
-        StringKeywords.port, 
-        StringKeywords.stream
-    };
-    */
+    private Byte aggLevel = (byte) 0; // raw values are not aggregated
 
-    public Double getValue() {
-        return value;
+    public Metric() {
     }
 
-    public void setAggLevel(String aggLevel){
-        this.aggLevel = aggLevel;
+    public Metric(String metric, Long timestamp, String executor, String compId,
+                  String stream, String topoIdStr, Double value) {
+        this.metricName = metric;
+        this.timestamp = timestamp;
+        this.executor = executor;
+        this.compIdStr = compId;
+        this.topoIdStr = topoIdStr;
+        this.stream = stream;
+        this.setValue(value);
     }
 
-    public String getAggLevel(){
-        return this.aggLevel;
+    public Metric(Metric o) {
+        this.aggLevel = o.getAggLevel();
+        this.topoIdStr = o.getTopoIdStr();
+        this.timestamp = o.getTimeStamp();
+        this.metricName = o.getMetricName();
+        this.compIdStr = o.getCompName();
+        this.executor = o.getExecutor();
+        this.host = o.getHost();
+        this.port = o.getPort();
+        this.stream = o.getStream();
+
+        this.count = o.getCount();
+        this.value = o.value;
+        this.sum = o.getSum();
+        this.min = o.getMin();
+        this.max = o.getMax();
     }
 
-    public String getKey() {
-        return serialize();
+    public boolean equals(Object o) {
+
+        if (o instanceof Metric == false)
+            return false;
+
+        Metric other = (Metric) o;
+
+        return this == other ||
+                (this.metricName.equals(other.getMetricName()) &&
+                        this.topoIdStr.equals(other.getTopoIdStr()) &&
+                        this.host.equals(other.getHost()) &&
+                        this.port == other.getPort() &&
+                        this.compIdStr.equals(other.getCompName()) &&
+                        this.timestamp == other.getTimeStamp() &&
+                        this.executor.equals(other.getExecutor()) &&
+                        this.stream.equals(other.getStream()) &&
+                        this.count == other.getCount() &&
+                        this.value == other.getValue() &&
+                        this.sum == other.getSum() &&
+                        this.min == other.getMin() &&
+                        this.max == other.getMax());
+
     }
 
     public void setValue(Double value) {
@@ -87,55 +109,150 @@ public class Metric {
         this.value = value;
     }
 
+    public Double getValue() {
+        //return this.value;
+        // why?
+        if (this.aggLevel == 0) {
+            return this.value;
+        } else {
+            return this.sum;
+        }
+    }
+
     public void updateAverage(Double value) {
         this.count += 1;
         this.min = Math.min(this.min, value);
         this.max = Math.max(this.max, value);
         this.sum += value;
         this.value = this.sum / this.count;
-        LOG.info("updating average {} {} {} {} {}", count, min, max, sum, value);
+        LOG.debug("updating average {} {} {} {} {}", count, min, max, sum, value);
     }
 
-    public Metric(String metric, Long timestamp, String executor, String compId, 
-                  String stream, String topoId, Double value) {
-        this.metricName = metric;
+    public void setOwner(String owner) {
+        this.owner = owner;
+    }
+
+    public String getOwner() {
+        return this.owner;
+    }
+
+    public void setAggLevel(Byte aggLevelInMins) {
+        this.aggLevel = aggLevelInMins;
+    }
+
+    public Byte getAggLevel() {
+        return this.aggLevel;
+    }
+
+    public void setCompName(String compName) {
+        this.compIdStr = compName;
+    }
+
+    public String getCompName() {
+        return this.compIdStr;
+    }
+
+    public void setTimeStamp(Long timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public Long getTimeStamp() {
+        return this.timestamp;
+    }
+
+    public void setTopoIdStr(String topoIdStr) {
+        this.topoIdStr = topoIdStr;
+    }
+
+    public String getTopoIdStr() {
+        return this.topoIdStr;
+    }
+
+    public void setMetricName(String metricName) {
+        this.metricName = metricName;
+    }
+
+    public String getMetricName() {
+        return this.metricName;
+    }
+
+    public void setExecutor(String executor) {
         this.executor = executor;
-        this.compId = compId;
-        this.topoId = topoId;
+    }
+
+    public String getExecutor() {
+        return this.executor;
+    }
+
+    public void setHost(String host) {
+        this.host = host;
+    }
+
+    public String getHost() {
+        return this.host;
+    }
+
+    public void setPort(Long port) {
+        this.port = port;
+    }
+
+    public Long getPort() {
+        return this.port;
+    }
+
+    public void setStream(String stream) {
         this.stream = stream;
-        this.value = value;
-        this.key = null;
     }
 
-    public Metric(String str) {
-        this.key = str;
-        deserialize(str);
+    public String getStream() {
+        return this.stream;
     }
 
-    public String getCompId() { return this.compId; }
+    public void setCount(long count) {
+        this.count = count;
+    }
 
-    public Long getTimeStamp() { return this.timestamp; }
+    public long getCount() {
+        return this.count;
+    }
 
-    public void setTimeStamp(Long timestamp) { this.timestamp = timestamp; }
+    public void setMin(Double min) {
+        this.min = min;
+    }
 
-    public String getTopoId() { return this.topoId; }
+    public Double getMin() {
+        return this.min;
+    }
 
-    public String getMetricName() { return this.metricName; }
+    public void setMax(Double max) {
+        this.max = max;
+    }
 
-    public String serialize() {
-        StringBuilder x = new StringBuilder();
-        x.append(this.timestamp);
+    public Double getMax() {
+        return this.max;
+    }
+
+    public void setSum(Double sum) {
+        this.sum = sum;
+    }
+
+    public Double getSum() {
+        return this.sum;
+    }
+
+    public String toString() {
+        StringBuilder x      = new StringBuilder();
+        Date          date   = new Date(this.timestamp);
+        DateFormat    format = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        x.append(format.format(date));
         x.append("|");
-        x.append(this.topoId);
+        x.append(this.topoIdStr);
         x.append("|");
-        if (aggLevel != null) {
-            x.append(aggLevel);
-        }
+        x.append(aggLevel);
         x.append("|");
         x.append(this.metricName);
         x.append("|");
-        x.append(this.compId);
+        x.append(this.compIdStr);
         x.append("|");
         x.append(this.executor);
         x.append("|");
@@ -144,130 +261,12 @@ public class Metric {
         x.append(this.port);
         x.append("|");
         x.append(this.stream);
-
-        return String.valueOf(x);
+        return String.format("%s -- count: %d -- value: %f -- min: %f -- max: %f -- sum: %f",
+                x.toString(),
+                this.count,
+                this.value,
+                this.min,
+                this.max,
+                this.sum);
     }
-
-    public void deserialize(String str) {
-        String[] elements = str.split("\\|");
-        this.timestamp = Long.parseLong(elements[0]);
-        this.topoId = elements[1];
-        this.aggLevel = elements[2];
-        this.metricName = elements[3];
-        this.compId = elements[4];
-        this.executor = elements[5];
-        this.host = elements[6];
-        this.port = Integer.parseInt(elements[7]);
-        this.stream = elements[8];
-    }
-
-    public String toString() {
-        return serialize() + " => count: " + this.count + " value: " + this.value + " min: " + this.min + " max: " + this.max + " sum: " + this.sum;
-    }
-
-    public static byte[] createPrefix(Map<String, Object> settings){
-        return null;
-        /*
-        StringBuilder x = new StringBuilder();
-        for(String each : prefixOrder) {
-            Object cur = null;
-
-            if (each == StringKeywords.timeStart){
-                // find minimium time beteween all time ranges
-                // this would be better organized as an ordered set
-                Set<TimeRange> timeRangeSet = (Set<TimeRange>)settings.get(StringKeywords.timeRangeSet);
-                if (timeRangeSet != null){
-                    Long minTime = null;
-                    for (TimeRange tr : timeRangeSet){
-                        if (minTime == null || tr.startTime < minTime){
-                            minTime = tr.startTime;
-                        }
-                    }
-                    cur = minTime;
-                }
-            } else {
-                cur = settings.get(each);
-                if (cur == null && each == StringKeywords.aggLevel){
-                    cur = "rt";
-                }
-            }
-
-            if(cur != null){
-                x.append(cur.toString());
-                x.append("|");
-            } else {
-                break;
-            }
-        }   
-
-        if(x.length() == 0) {
-            return null;
-        } else {
-            x.deleteCharAt(x.length()-1);
-            return x.toString().getBytes();
-        }
-        */
-    }
-
-    public byte[] getKeyBytes(){
-        return this.getKey().getBytes();
-    }
-
-    public byte[] getValueBytes(){
-        int bufferSize = count > 1 ? 320 : 128;
-        LOG.info("Buffer size {}", bufferSize);
-        ByteBuffer bb = ByteBuffer.allocate(bufferSize);
-        bb.putLong(count);
-        bb.putDouble(value);
-        if (count > 1) {
-            bb.putDouble(min);
-            bb.putDouble(max);
-            bb.putDouble(sum);
-        }
-        LOG.info("buffer size {}", bb.arrayOffset());
-        return bb.array();
-    }
-
-    public void setValueFromBytes(byte[] valueInBytes){
-        if (valueInBytes == null) {
-            LOG.error("Null bytes!");
-            count = 0L;
-            value = 0.0;
-            min = 0.0;
-            max = 0.0;
-            sum = 0.0;
-            return;
-        }
-        ByteBuffer bb = ByteBuffer.wrap(valueInBytes);
-        count = bb.getLong();
-        value = bb.getDouble();
-        if (count > 1) {
-            min = bb.getDouble();
-            max = bb.getDouble();
-            sum = bb.getDouble();
-        } else {
-            min = value;
-            max = value;
-            sum = value;
-        }
-    }
-
-    public static byte[] longToBytes(long l) {
-        byte[] result = new byte[8];
-        for (int i = 7; i >= 0; i--) {
-            result[i] = (byte)(l & 0xFF);
-            l >>= 8;
-        }
-        return result;
-    }
-
-    public static long bytesToLong(byte[] b) {
-        long result = 0;
-        for (int i = 0; i < 8; i++) {
-            result <<= 8;
-            result |= (b[i] & 0xFF);
-        }
-        return result;
-    }
-
 }

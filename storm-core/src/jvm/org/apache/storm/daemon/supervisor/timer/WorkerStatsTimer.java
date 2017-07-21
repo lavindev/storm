@@ -47,6 +47,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 import org.apache.storm.metric.StatsPusher;
 
@@ -135,6 +137,10 @@ public class WorkerStatsTimer implements Runnable {
     public void run() {
         LocalState localState = supervisor.getLocalState();
         Map<Integer, LocalAssignment> localAssignment = localState.getLocalAssignmentsMap();
+        if (localAssignment == null){
+            return;
+        }
+
         Map<String, Integer> approvedWorkers = localState.getApprovedWorkers();
         if (approvedWorkers == null) {
             return;
@@ -142,7 +148,15 @@ public class WorkerStatsTimer implements Runnable {
 
         SupervisorWorkerStats supervisorWorkerStats = new SupervisorWorkerStats();
         supervisorWorkerStats.set_supervisor_id(supervisorId);
-        supervisorWorkerStats.set_supervisor_host("todo?");
+
+        String host = "unknown";
+        try {
+            host = InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException uhe){
+            LOG.error ("Unable to get hostname, metrics will have a bad host name", uhe);
+        }
+
+        supervisorWorkerStats.set_supervisor_host(host);
         for (String workerId : approvedWorkers.keySet()) {
             try {
                 TimeseriesStore ts = new TimeseriesStore(ConfigUtils.absoluteStormLocalDir(conf) + File.separator + 
@@ -169,7 +183,9 @@ public class WorkerStatsTimer implements Runnable {
                 supervisorWorkerStats.put_to_worker_stats(workerId, workerStats);
             }catch (IOException ex) {System.out.println(ex);}
         }
-
-        statsPusher.sendWorkerStatsToNimbus(supervisorWorkerStats);
+        if (supervisorWorkerStats.get_worker_stats() != null) {
+            // no need to send if the stats collection is empty
+            statsPusher.sendWorkerStatsToNimbus(supervisorWorkerStats);
+        }
     }
 }

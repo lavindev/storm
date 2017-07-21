@@ -162,109 +162,53 @@ public class StormPreparableReporter implements PreparableReporter {
                 for (Map.Entry<String, Counter> c : counters.entrySet()) {
                     String key = c.getKey();
                     long count = c.getValue().getCount();
-                    // check the cache to see if the value changed
-                    Long oldCount = counterCache.get(key);
-                    oldCount = oldCount == null ? 0L : oldCount;
-
-                    // report the delta between the old count and the new count
-                    // if count is positive, take diff
-                    // oldCount is always <= count (counters are always increasing)
-                    long reportCount = count > 0 ? count - oldCount : 0;
-                    LOG.info ("{}: would send {} current is {} old was {}", 
-                            key, reportCount, count, oldCount);
-
-                    // for the next call
-                    counterCache.put(key, count);
-
-                    workerStats.set_time_stamp(_reportTime);
-                    workerStats.put_to_metrics(key, new Double(reportCount));
+                    putDelta(workerStats, key, count);
                 }
             }
             if (gauges != null) {
                 for (Map.Entry<String, Gauge> c : gauges.entrySet()) {
                     String key = c.getKey();
                     LOG.info("Gauge {}", key);
-                    long value = (Long)c.getValue().getValue();
+                    // TODO: value here is an object, so we are making all kinds of assumptions
+                    double value = ((Number)c.getValue().getValue()).doubleValue();
                     LOG.info("Gauge k {} v {}", key, value);
                     workerStats.put_to_metrics(key, value);
                 }
             }
-            if (histograms != null) {
-                for (Map.Entry<String, Histogram> c : histograms.entrySet()) {
-                    String key = c.getKey();
-                    Histogram t = c.getValue();
-                    double count = t.getCount();
-                    Snapshot snap = t.getSnapshot();
-                    double pct75  = snap.get75thPercentile();
-                    double pct95  = snap.get95thPercentile();
-                    double pct98  = snap.get98thPercentile();
-                    double pct99  = snap.get99thPercentile();
-                    double pct999 = snap.get999thPercentile();
-                    long max      = snap.getMax();
-                    long min      = snap.getMin();
-                    double means  = snap.getMean();
-                    double median = snap.getMedian();
-                    double stddev = snap.getStdDev();
-                    long[] vals   = snap.getValues();
-
-                    //workerStats.put_to_metrics(key + "--pct75" , new Double(pct75));
-                    //workerStats.put_to_metrics(key + "--pct95" , new Double(pct95));
-                    //workerStats.put_to_metrics(key + "--pct98" , new Double(pct98));
-                    //workerStats.put_to_metrics(key + "--pct99" , new Double(pct99));
-                    //workerStats.put_to_metrics(key + "--pct999", new Double(pct999));
-                    //workerStats.put_to_metrics(key + "--max"   , new Double(max));
-                    //workerStats.put_to_metrics(key + "--min"   , new Double(min));
-                    //workerStats.put_to_metrics(key + "--means" , new Double(means));
-                   // workerStats.put_to_metrics(key + "--median", new Double(median));
-                   // workerStats.put_to_metrics(key + "--stddev", new Double(stddev));
-                   //for (int i = 0; i < vals.length; i++){
-                   //    workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
-                   //}
+            if (meters != null) {
+                for (Map.Entry<String, Meter> m : meters.entrySet()) {
+                    String key = m.getKey();
+                    LOG.info("Meter {}", key);
+                    long value = (Long)m.getValue().getCount();
+                    putDelta(workerStats, key, value);
                 }
+            }
+            if (histograms != null) {
+                LOG.warn("Histograms are not supported by the StormPreparableReporter");
             }
             if (timers != null) {
-                for (Map.Entry<String, Timer> c : timers.entrySet()) {
-                    String key = c.getKey();
-                    Timer t = c.getValue();
-                    long count = t.getCount();
-                    double rate15 = t.getFifteenMinuteRate();
-                    double rate5  = t.getFiveMinuteRate();
-                    double rate1  = t.getOneMinuteRate();
-                    double mean   = t.getMeanRate();
-                    Snapshot snap = t.getSnapshot();
-                    double pct75  = snap.get75thPercentile();
-                    double pct95  = snap.get95thPercentile();
-                    double pct98  = snap.get98thPercentile();
-                    double pct99  = snap.get99thPercentile();
-                    double pct999 = snap.get999thPercentile();
-                    long max      = snap.getMax();
-                    long min      = snap.getMin();
-                    double means  = snap.getMean();
-                    double median = snap.getMedian();
-                    double stddev = snap.getStdDev();
-                    long[] vals   = snap.getValues();
-
-                    //workerStats.put_to_metrics(key + "--count" , new Double(count));
-                    //workerStats.put_to_metrics(key + "--rate15", new Double(rate15));
-                    //workerStats.put_to_metrics(key + "--rate5" , new Double(rate5));
-                    //workerStats.put_to_metrics(key + "--rate1" , new Double(rate1));
-                    //workerStats.put_to_metrics(key + "--mean"  , new Double(mean));
-                    //workerStats.put_to_metrics(key + "--pct75" , new Double(pct75));
-                    //workerStats.put_to_metrics(key + "--pct95" , new Double(pct95));
-                    //workerStats.put_to_metrics(key + "--pct98" , new Double(pct98));
-                    //workerStats.put_to_metrics(key + "--pct99" , new Double(pct99));
-                    //workerStats.put_to_metrics(key + "--pct999", new Double(pct999));
-                    //workerStats.put_to_metrics(key + "--max"   , new Double(max));
-                    //workerStats.put_to_metrics(key + "--min"   , new Double(min));
-                    //workerStats.put_to_metrics(key + "--means" , new Double(means));
-                    //workerStats.put_to_metrics(key + "--median", new Double(median));
-                    //workerStats.put_to_metrics(key + "--stddev", new Double(stddev));
-                    //for (int i = 0; i < vals.length; i++){
-                    //    workerStats.put_to_metrics(key + "--vals" + i,   new Double(vals[i]));
-                    //}
-                }
+                LOG.warn("Timers are not supported by the StormPreparableReporter");
             }
             state.setWorkerStats(workerStats);
+        }
+
+        private void putDelta(LSWorkerStats workerStats, String key, long count){
+            // check the cache to see if the value changed
+            Long oldCount = counterCache.get(key);
+            oldCount = oldCount == null ? 0L : oldCount;
+
+            // report the delta between the old count and the new count
+            // if count is positive, take diff
+            // oldCount is always <= count (counters are always increasing)
+            long reportCount = count > 0 ? count - oldCount : 0;
+            LOG.info ("{}: would send {} current is {} old was {}", 
+                    key, reportCount, count, oldCount);
+
+            // for the next call
+            counterCache.put(key, count);
+
+            workerStats.set_time_stamp(_reportTime);
+            workerStats.put_to_metrics(key, new Double(reportCount));
         }
     }
 }

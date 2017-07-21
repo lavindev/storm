@@ -65,6 +65,7 @@ public class SpoutExecutorStats extends CommonStats {
         this.getCounter(component, stream, ACKED).inc(this.rate);
         this.getCompleteLatencies().record(stream, latencyMs);
         this.getGauge(component, stream, COMPLETE_LATENCIES).update(latencyMs);
+        this.getHistogram(component, stream, COMPLETE_LATENCIES + "-histo").update(latencyMs);
     }
 
     public void spoutFailedTuple(String stream, String component, long latencyMs) {

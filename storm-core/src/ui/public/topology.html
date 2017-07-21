@@ -322,6 +322,13 @@ $(document).ready(function() {
                 var statArray = windows.map(function (window){
                     //TODO-AB: just add this as paort of response
                     var stat = newStats.stats[window];
+                    stat.emitted = stat.emitted || 0;
+                    stat.transferred = stat.transferred || 0;
+                    stat["complete-latencies"] = stat["complete-latencies"] || 0;
+                    stat["execute-latencies"] = stat["execute-latencies"] || 0;
+                    stat["process-latencies"] = stat["process-latencies"] || 0;
+                    stat.acked = stat.acked || 0;
+                    stat.failed = stat.failed || 0;
                     switch (window) {
                         case "TEN_MIN":
                             stat.window = 600;

@@ -28,16 +28,14 @@ import java.util.Map;
 import java.util.HashMap;
 import org.apache.thrift.TEnum;
 
-public enum StatsStoreOperation implements org.apache.thrift.TEnum {
-  SUM(0),
-  AVG(1),
-  MIN(2),
-  MAX(3),
-  SERIES(4);
+public enum AggLevel implements org.apache.thrift.TEnum {
+  RAW(0),
+  TEN_MIN(1),
+  HOUR(2);
 
   private final int value;
 
-  private StatsStoreOperation(int value) {
+  private AggLevel(int value) {
     this.value = value;
   }
 
@@ -52,18 +50,14 @@ public enum StatsStoreOperation implements org.apache.thrift.TEnum {
    * Find a the enum type by its integer value, as defined in the Thrift IDL.
    * @return null if the value is not found.
    */
-  public static StatsStoreOperation findByValue(int value) { 
+  public static AggLevel findByValue(int value) { 
     switch (value) {
       case 0:
-        return SUM;
+        return RAW;
       case 1:
-        return AVG;
+        return TEN_MIN;
       case 2:
-        return MIN;
-      case 3:
-        return MAX;
-      case 4:
-        return SERIES;
+        return HOUR;
       default:
         return null;
     }

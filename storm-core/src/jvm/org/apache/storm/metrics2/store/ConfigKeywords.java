@@ -17,20 +17,20 @@
  */
 package org.apache.storm.metrics2.store;
 
+class ConfigKeywords {
 
-public class StringKeywords
-{
-    public final static String aggLevel = "aggLevel";
-    public final static String metricName = "metricName";
-    public final static String topoId = "topoId";
-    public final static String timeStart = "timeStart";
-    public final static String timeEnd = "timeEnd";
-    public final static String timeRangeSet = "timeRangeSet";
-    public final static String initialTimeRangeSet = "initialTimeRangeSet";
-    public final static String metricSet = "metricSet";
-    public final static String component = "component";
-    public final static String executor = "executor";
-    public final static String host = "host";
-    public final static String port = "port";
-    public final static String stream = "stream";
+    final static String BASE_CONFIG_KEY = "storm.metrics2.store.HBaseStore";
+
+    final static String HBASE_ZK_KEY = BASE_CONFIG_KEY + ".zookeeper";
+    final static String STORM_ZK_KEY = "storm.zookeeper";
+
+    final static String ZOOKEEPER_SERVERS = ".servers";
+    final static String ZOOKEEPER_PORT = ".port";
+    final static String ZOOKEEPER_ROOT = ".root";
+    final static String ZOOKEEPER_SESSION_TIMEOUT = ".session.timeout";
+
+    final static String HBASE_ROOT_DIR = BASE_CONFIG_KEY + ".hbase.root_dir";
+
+    final static String SCHEMA_KEY = BASE_CONFIG_KEY + ".hbase.schema";
+
 }

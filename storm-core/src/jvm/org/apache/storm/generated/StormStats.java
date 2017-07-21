@@ -56,6 +56,7 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
   private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("StormStats");
 
   private static final org.apache.thrift.protocol.TField WINDOWED_STATS_FIELD_DESC = new org.apache.thrift.protocol.TField("windowed_stats", org.apache.thrift.protocol.TType.LIST, (short)1);
+  private static final org.apache.thrift.protocol.TField SERIES_STATS_FIELD_DESC = new org.apache.thrift.protocol.TField("series_stats", org.apache.thrift.protocol.TType.STRUCT, (short)2);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -64,10 +65,12 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
   }
 
   private List<StormWindowedStats> windowed_stats; // optional
+  private StormSeriesStats series_stats; // optional
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
-    WINDOWED_STATS((short)1, "windowed_stats");
+    WINDOWED_STATS((short)1, "windowed_stats"),
+    SERIES_STATS((short)2, "series_stats");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -84,6 +87,8 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
       switch(fieldId) {
         case 1: // WINDOWED_STATS
           return WINDOWED_STATS;
+        case 2: // SERIES_STATS
+          return SERIES_STATS;
         default:
           return null;
       }
@@ -124,13 +129,15 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
   }
 
   // isset id assignments
-  private static final _Fields optionals[] = {_Fields.WINDOWED_STATS};
+  private static final _Fields optionals[] = {_Fields.WINDOWED_STATS,_Fields.SERIES_STATS};
   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
   static {
     Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
     tmpMap.put(_Fields.WINDOWED_STATS, new org.apache.thrift.meta_data.FieldMetaData("windowed_stats", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
         new org.apache.thrift.meta_data.ListMetaData(org.apache.thrift.protocol.TType.LIST, 
             new org.apache.thrift.meta_data.StructMetaData(org.apache.thrift.protocol.TType.STRUCT, StormWindowedStats.class))));
+    tmpMap.put(_Fields.SERIES_STATS, new org.apache.thrift.meta_data.FieldMetaData("series_stats", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
+        new org.apache.thrift.meta_data.StructMetaData(org.apache.thrift.protocol.TType.STRUCT, StormSeriesStats.class)));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(StormStats.class, metaDataMap);
   }
@@ -149,6 +156,9 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
       }
       this.windowed_stats = __this__windowed_stats;
     }
+    if (other.is_set_series_stats()) {
+      this.series_stats = new StormSeriesStats(other.series_stats);
+    }
   }
 
   public StormStats deepCopy() {
@@ -158,6 +168,7 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
   @Override
   public void clear() {
     this.windowed_stats = null;
+    this.series_stats = null;
   }
 
   public int get_windowed_stats_size() {
@@ -198,6 +209,29 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
     }
   }
 
+  public StormSeriesStats get_series_stats() {
+    return this.series_stats;
+  }
+
+  public void set_series_stats(StormSeriesStats series_stats) {
+    this.series_stats = series_stats;
+  }
+
+  public void unset_series_stats() {
+    this.series_stats = null;
+  }
+
+  /** Returns true if field series_stats is set (has been assigned a value) and false otherwise */
+  public boolean is_set_series_stats() {
+    return this.series_stats != null;
+  }
+
+  public void set_series_stats_isSet(boolean value) {
+    if (!value) {
+      this.series_stats = null;
+    }
+  }
+
   public void setFieldValue(_Fields field, Object value) {
     switch (field) {
     case WINDOWED_STATS:
@@ -208,6 +242,14 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
       }
       break;
 
+    case SERIES_STATS:
+      if (value == null) {
+        unset_series_stats();
+      } else {
+        set_series_stats((StormSeriesStats)value);
+      }
+      break;
+
     }
   }
 
@@ -215,6 +257,9 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
     switch (field) {
     case WINDOWED_STATS:
       return get_windowed_stats();
+
+    case SERIES_STATS:
+      return get_series_stats();
 
     }
     throw new IllegalStateException();
@@ -229,6 +274,8 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
     switch (field) {
     case WINDOWED_STATS:
       return is_set_windowed_stats();
+    case SERIES_STATS:
+      return is_set_series_stats();
     }
     throw new IllegalStateException();
   }
@@ -255,6 +302,15 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
         return false;
     }
 
+    boolean this_present_series_stats = true && this.is_set_series_stats();
+    boolean that_present_series_stats = true && that.is_set_series_stats();
+    if (this_present_series_stats || that_present_series_stats) {
+      if (!(this_present_series_stats && that_present_series_stats))
+        return false;
+      if (!this.series_stats.equals(that.series_stats))
+        return false;
+    }
+
     return true;
   }
 
@@ -266,6 +322,11 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
     list.add(present_windowed_stats);
     if (present_windowed_stats)
       list.add(windowed_stats);
+
+    boolean present_series_stats = true && (is_set_series_stats());
+    list.add(present_series_stats);
+    if (present_series_stats)
+      list.add(series_stats);
 
     return list.hashCode();
   }
@@ -284,6 +345,16 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
     }
     if (is_set_windowed_stats()) {
       lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.windowed_stats, other.windowed_stats);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
+    lastComparison = Boolean.valueOf(is_set_series_stats()).compareTo(other.is_set_series_stats());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (is_set_series_stats()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.series_stats, other.series_stats);
       if (lastComparison != 0) {
         return lastComparison;
       }
@@ -317,6 +388,16 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
       }
       first = false;
     }
+    if (is_set_series_stats()) {
+      if (!first) sb.append(", ");
+      sb.append("series_stats:");
+      if (this.series_stats == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.series_stats);
+      }
+      first = false;
+    }
     sb.append(")");
     return sb.toString();
   }
@@ -324,6 +405,9 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
   public void validate() throws org.apache.thrift.TException {
     // check for required fields
     // check for sub-struct validity
+    if (series_stats != null) {
+      series_stats.validate();
+    }
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
@@ -363,18 +447,27 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
           case 1: // WINDOWED_STATS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list856 = iprot.readListBegin();
-                struct.windowed_stats = new ArrayList<StormWindowedStats>(_list856.size);
-                StormWindowedStats _elem857;
-                for (int _i858 = 0; _i858 < _list856.size; ++_i858)
+                org.apache.thrift.protocol.TList _list884 = iprot.readListBegin();
+                struct.windowed_stats = new ArrayList<StormWindowedStats>(_list884.size);
+                StormWindowedStats _elem885;
+                for (int _i886 = 0; _i886 < _list884.size; ++_i886)
                 {
-                  _elem857 = new StormWindowedStats();
-                  _elem857.read(iprot);
-                  struct.windowed_stats.add(_elem857);
+                  _elem885 = new StormWindowedStats();
+                  _elem885.read(iprot);
+                  struct.windowed_stats.add(_elem885);
                 }
                 iprot.readListEnd();
               }
               struct.set_windowed_stats_isSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
+          case 2: // SERIES_STATS
+            if (schemeField.type == org.apache.thrift.protocol.TType.STRUCT) {
+              struct.series_stats = new StormSeriesStats();
+              struct.series_stats.read(iprot);
+              struct.set_series_stats_isSet(true);
             } else { 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
@@ -397,12 +490,19 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
           oprot.writeFieldBegin(WINDOWED_STATS_FIELD_DESC);
           {
             oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.windowed_stats.size()));
-            for (StormWindowedStats _iter859 : struct.windowed_stats)
+            for (StormWindowedStats _iter887 : struct.windowed_stats)
             {
-              _iter859.write(oprot);
+              _iter887.write(oprot);
             }
             oprot.writeListEnd();
           }
+          oprot.writeFieldEnd();
+        }
+      }
+      if (struct.series_stats != null) {
+        if (struct.is_set_series_stats()) {
+          oprot.writeFieldBegin(SERIES_STATS_FIELD_DESC);
+          struct.series_stats.write(oprot);
           oprot.writeFieldEnd();
         }
       }
@@ -427,35 +527,46 @@ public class StormStats implements org.apache.thrift.TBase<StormStats, StormStat
       if (struct.is_set_windowed_stats()) {
         optionals.set(0);
       }
-      oprot.writeBitSet(optionals, 1);
+      if (struct.is_set_series_stats()) {
+        optionals.set(1);
+      }
+      oprot.writeBitSet(optionals, 2);
       if (struct.is_set_windowed_stats()) {
         {
           oprot.writeI32(struct.windowed_stats.size());
-          for (StormWindowedStats _iter860 : struct.windowed_stats)
+          for (StormWindowedStats _iter888 : struct.windowed_stats)
           {
-            _iter860.write(oprot);
+            _iter888.write(oprot);
           }
         }
+      }
+      if (struct.is_set_series_stats()) {
+        struct.series_stats.write(oprot);
       }
     }
 
     @Override
     public void read(org.apache.thrift.protocol.TProtocol prot, StormStats struct) throws org.apache.thrift.TException {
       TTupleProtocol iprot = (TTupleProtocol) prot;
-      BitSet incoming = iprot.readBitSet(1);
+      BitSet incoming = iprot.readBitSet(2);
       if (incoming.get(0)) {
         {
-          org.apache.thrift.protocol.TList _list861 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.windowed_stats = new ArrayList<StormWindowedStats>(_list861.size);
-          StormWindowedStats _elem862;
-          for (int _i863 = 0; _i863 < _list861.size; ++_i863)
+          org.apache.thrift.protocol.TList _list889 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.windowed_stats = new ArrayList<StormWindowedStats>(_list889.size);
+          StormWindowedStats _elem890;
+          for (int _i891 = 0; _i891 < _list889.size; ++_i891)
           {
-            _elem862 = new StormWindowedStats();
-            _elem862.read(iprot);
-            struct.windowed_stats.add(_elem862);
+            _elem890 = new StormWindowedStats();
+            _elem890.read(iprot);
+            struct.windowed_stats.add(_elem890);
           }
         }
         struct.set_windowed_stats_isSet(true);
+      }
+      if (incoming.get(1)) {
+        struct.series_stats = new StormSeriesStats();
+        struct.series_stats.read(iprot);
+        struct.set_series_stats_isSet(true);
       }
     }
   }

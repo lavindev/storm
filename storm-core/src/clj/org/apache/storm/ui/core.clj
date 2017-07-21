@@ -1172,11 +1172,35 @@
           (dofor [stat (.get_windowed_stats stats)]
             {(.get_window stat) (into {} (.get_values stat))}))))))
 
+;; TODO payload => spec everywhere
+(defn get-stats-series
+  ([spec]
+    (thrift/with-configured-nimbus-connection nimbus
+      (let [_ (println spec)
+            _ (println (get spec :startTime ))
+            _ (println (get spec :endTime ))
+            stats-spec (doto (StatsSpec.) 
+                         (.set_op StatsStoreOperation/SERIES)
+                         (.set_topology_id (:topoId spec))
+                         (.set_component (:component spec))
+                         (.set_metrics (:metrics spec))
+                         (.set_start_time_sec (Long/parseLong (get spec :startTime)))
+                         (.set_end_time_sec (Long/parseLong (get spec :endTime ))))
+            stats (.getStats ^Nimbus$Client nimbus stats-spec)]
+        (into {} 
+          (let [stat (.get_series_stats stats)]
+            {"times" (.get_times stat) 
+             "values" (into {} (.get_values stat))}))))))
+
 (defroutes main-routes
   (GET "/api/v1/cluster/configuration" [& m]
     (.mark ui:num-cluster-configuration-http-requests)
     (json-response (cluster-configuration)
                    (:callback m) :need-serialize false))
+  (POST "/api/v1/stats-series" [:as {:keys [cookies servlet-request]} payload & m]
+    (populate-context! servlet-request)
+    (assert-authorized-user "getClusterInfo")
+    (json-response (get-stats-series payload) (:callback m)))
   (GET "/api/v1/stats/:id" [:as {:keys [cookies servlet-request scheme]} id & m]
     (populate-context! servlet-request)
     (assert-authorized-user "getClusterInfo")
