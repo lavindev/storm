@@ -75,6 +75,7 @@ public class HBaseStoreTest {
             conf.put("HBaseZookeeperPortOverride", zkPort);
 
             try {
+                testUtil.compact(true);
                 initSchema(conf, testUtil.getHBaseAdmin());
                 store = new HBaseStore().prepare(conf);
                 metricsTable = store.getMetricsTable();
@@ -559,14 +560,6 @@ public class HBaseStoreTest {
         settings.put(StringKeywords.topoId, insertedMetrics.get(0).getTopoIdStr());
         settings.put(StringKeywords.timeRangeSet, timeRangeSet);
         settings.put(StringKeywords.initialTimeRangeSet, timeRangeSet);
-
-        // scan for inserted metrics, should have all
-
-        store.scan(settings, (metric, timeRanges) -> retrievedMetrics.add(metric));
-
-        assertEquals(insertedMetrics.size(), retrievedMetrics.size());
-
-        retrievedMetrics.clear();
 
         // remove metrics
         store.remove(settings);
