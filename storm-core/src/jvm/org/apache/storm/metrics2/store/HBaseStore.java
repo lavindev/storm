@@ -19,7 +19,10 @@ package org.apache.storm.metrics2.store;
 
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,10 +57,7 @@ public class HBaseStore implements MetricStore {
 
         try {
             HConnection hbaseConnection = HConnectionManager.createConnection(hbaseConf);
-            HBaseAdmin  hbaseAdmin      = new HBaseAdmin(hbaseConnection);
             HBaseSchema schema          = new HBaseSchema(config);
-
-            validateTables(hbaseAdmin, schema);
 
             TableName metricsTable = schema.metricsTableInfo.getTableName();
             this._metricsTable = hbaseConnection.getTable(metricsTable);
@@ -68,34 +68,6 @@ public class HBaseStore implements MetricStore {
         }
 
         return this;
-    }
-
-    /**
-     * Validate existing HBase tables to ensure they match conf schema
-     *
-     * @param admin  HBase admin object
-     * @param schema HBaseSchema from constructor
-     * @throws IOException     On admin IO failure
-     * @throws MetricException On schema mismatch
-     */
-    private void validateTables(HBaseAdmin admin, HBaseSchema schema) throws IOException, MetricException {
-
-        HashMap<TableName, ArrayList<HColumnDescriptor>> tableMap = schema.getTableMap();
-
-        for (Map.Entry<TableName, ArrayList<HColumnDescriptor>> entry : tableMap.entrySet()) {
-
-            TableName                    name        = entry.getKey();
-            ArrayList<HColumnDescriptor> columnsList = entry.getValue();
-
-            if (!admin.tableExists(name))
-                throw new MetricException("Table " + name.getNameAsString() + " does not exist in store");
-
-            HTableDescriptor        currentDescriptor     = admin.getTableDescriptor(name);
-            List<HColumnDescriptor> currentColumnFamilies = Arrays.asList(currentDescriptor.getColumnFamilies());
-
-            if (!currentColumnFamilies.containsAll(columnsList))
-                throw new MetricException("Table " + name.getNameAsString() + " does not contain all columns");
-        }
     }
 
     /**
