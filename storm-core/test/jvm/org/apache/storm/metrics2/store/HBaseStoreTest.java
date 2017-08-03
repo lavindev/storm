@@ -20,6 +20,7 @@ package org.apache.storm.metrics2.store;
 
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.zookeeper.MiniZooKeeperCluster;
 import org.apache.storm.generated.Window;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -73,6 +74,7 @@ public class HBaseStoreTest {
             conf = makeConfig(schemaType);
             int zkPort = testUtil.getZkCluster().getClientPort();
             conf.put("HBaseZookeeperPortOverride", zkPort);
+            LOG.info("ZKPort is {}", zkPort);
 
             try {
                 testUtil.compact(true);
@@ -163,7 +165,7 @@ public class HBaseStoreTest {
 
     private static void enableMetricsTable() {
         try {
-            TableName  name  = metricsTable.getName();
+            TableName name = metricsTable.getName();
             HBaseAdmin admin = testUtil.getHBaseAdmin();
             admin.enableTable(name);
         } catch (IOException e) {
@@ -173,7 +175,7 @@ public class HBaseStoreTest {
 
     private static void disableMetricsTable() {
         try {
-            TableName  name  = metricsTable.getName();
+            TableName name = metricsTable.getName();
             HBaseAdmin admin = testUtil.getHBaseAdmin();
             admin.disableTable(name);
         } catch (IOException e) {
@@ -202,7 +204,6 @@ public class HBaseStoreTest {
             // set ZK info from test cluster
             int zkPort = testUtil.getZkCluster().getClientPort();
             conf.put("HBaseZookeeperPortOverride", zkPort);
-            System.out.println("Testing ZK Port = " + zkPort);
 
             store = new HBaseStore().prepare(conf);
             metricsTable = store.getMetricsTable();
@@ -215,12 +216,12 @@ public class HBaseStoreTest {
     private static void initSchema(Map conf, HBaseAdmin admin) {
 
         try {
-            HBaseSchema                                      schema   = new HBaseSchema(conf);
+            HBaseSchema schema = new HBaseSchema(conf);
             HashMap<TableName, ArrayList<HColumnDescriptor>> tableMap = schema.getTableMap();
 
             for (Map.Entry<TableName, ArrayList<HColumnDescriptor>> entry : tableMap.entrySet()) {
 
-                TableName               name        = entry.getKey();
+                TableName name = entry.getKey();
                 List<HColumnDescriptor> columnsList = entry.getValue();
 
                 HTableDescriptor descriptor = new HTableDescriptor(name);
@@ -248,7 +249,7 @@ public class HBaseStoreTest {
         // clear out metrics table
         ArrayList<Row> metricsToDelete = new ArrayList<>();
         try {
-            Scan          scanAll       = new Scan();
+            Scan scanAll = new Scan();
             ResultScanner resultScanner = metricsTable.getScanner(scanAll);
 
             for (Result result : resultScanner) {
@@ -286,7 +287,7 @@ public class HBaseStoreTest {
         store.insert(m);
 
         ResultScanner scanner;
-        Scan          s = new Scan();
+        Scan s = new Scan();
         try {
             scanner = metricsTable.getScanner(s);
         } catch (Exception e) {
@@ -308,8 +309,8 @@ public class HBaseStoreTest {
     @Test
     public void testInsertFailures() {
         HTableInterface mockTable = mock(HTableInterface.class);
-        Metric          m         = makeMetric(random.nextInt(9999));
-        HBaseStore      tempStore = new HBaseStore();
+        Metric m = makeMetric(random.nextInt(9999));
+        HBaseStore tempStore = new HBaseStore();
 
         // set up temp store with mock table
         try {
@@ -344,7 +345,7 @@ public class HBaseStoreTest {
         store.insert(m);
 
         ResultScanner scanner;
-        Scan          s = new Scan();
+        Scan s = new Scan();
         try {
             scanner = metricsTable.getScanner(s);
         } catch (Exception e) {
@@ -364,10 +365,10 @@ public class HBaseStoreTest {
 
     @Test
     public void testScan() {
-        final int COUNT      = 10;
-        int[]     timestamps = generateTimestamps(12000, 18000, COUNT);
+        final int COUNT = 10;
+        int[] timestamps = generateTimestamps(12000, 18000, COUNT);
 
-        ArrayList<Metric> metricsList      = new ArrayList<>(COUNT);
+        ArrayList<Metric> metricsList = new ArrayList<>(COUNT);
         ArrayList<Metric> retrievedMetrics = new ArrayList<>(COUNT);
 
         for (int i = 0; i < 10; i++) {
@@ -387,9 +388,9 @@ public class HBaseStoreTest {
 
         final int COUNT = 100;
 
-        ArrayList<Metric> metricsList      = new ArrayList<>(COUNT);
+        ArrayList<Metric> metricsList = new ArrayList<>(COUNT);
         ArrayList<Metric> retrievedMetrics = new ArrayList<>(COUNT);
-        int[]             timestamps       = generateTimestamps(0, 10000, COUNT);
+        int[] timestamps = generateTimestamps(0, 10000, COUNT);
 
         for (int i = 0; i < COUNT; i++) {
             Metric m = makeMetric(timestamps[i]);
@@ -397,8 +398,8 @@ public class HBaseStoreTest {
             store.insert(m);
         }
 
-        Integer aggLevel  = metricsList.get(0).getAggLevel().intValue();
-        String  topoIdStr = metricsList.get(0).getTopoIdStr();
+        Integer aggLevel = metricsList.get(0).getAggLevel().intValue();
+        String topoIdStr = metricsList.get(0).getTopoIdStr();
 
         HashSet<TimeRange> timeRangeSet = new HashSet<>();
         timeRangeSet.add(new TimeRange(0L, 5000L, Window.ALL));
@@ -407,10 +408,10 @@ public class HBaseStoreTest {
         HashSet<String> metricsSet = new HashSet<>();
         metricsSet.add(metricsList.get(0).getMetricName());
 
-        String compId     = metricsList.get(0).getCompName();
+        String compId = metricsList.get(0).getCompName();
         String executorId = metricsList.get(0).getExecutor();
-        String hostId     = metricsList.get(0).getHost();
-        String port       = String.valueOf(metricsList.get(0).getPort());
+        String hostId = metricsList.get(0).getHost();
+        String port = String.valueOf(metricsList.get(0).getPort());
 
         LinkedHashMap<String, Object> filterMap = new LinkedHashMap<>();
         filterMap.put(StringKeywords.aggLevel, aggLevel);
@@ -446,7 +447,7 @@ public class HBaseStoreTest {
     public void testVersioning() {
 
         final int COUNT = 100;
-        Metric    m     = makeMetric(25000);
+        Metric m = makeMetric(25000);
         m.setStream("testStream"); // remove ts from stream
 
         for (int i = 1; i <= COUNT; ++i) {
@@ -459,7 +460,7 @@ public class HBaseStoreTest {
         settings.put(StringKeywords.aggLevel, m.getAggLevel().intValue());
         settings.put(StringKeywords.topoId, m.getTopoIdStr());
 
-        TimeRange          tr      = new TimeRange(25000L, (25000L * COUNT) + 1L, Window.ALL);
+        TimeRange tr = new TimeRange(25000L, (25000L * COUNT) + 1L, Window.ALL);
         HashSet<TimeRange> timeSet = new HashSet<>();
         timeSet.add(tr);
         settings.put(StringKeywords.timeRangeSet, timeSet);
@@ -478,8 +479,8 @@ public class HBaseStoreTest {
 
     @Test
     public void testPopulateValue() {
-        long   ts = random.nextInt(99999);
-        Metric m  = makeMetric(ts);
+        long ts = random.nextInt(99999);
+        Metric m = makeMetric(ts);
         store.insert(m);
 
         Metric newMetric = makeMetric(ts);
@@ -506,8 +507,8 @@ public class HBaseStoreTest {
 
     @Test
     public void testPopulateValueAgg() {
-        long   ts = random.nextInt(99999);
-        Metric m  = makeAggMetric(ts);
+        long ts = random.nextInt(99999);
+        Metric m = makeAggMetric(ts);
         store.insert(m);
 
         Metric newMetric = makeAggMetric(ts);
@@ -537,7 +538,7 @@ public class HBaseStoreTest {
     @Test
     public void testRemove() {
 
-        ArrayList<Metric> insertedMetrics  = new ArrayList<>();
+        ArrayList<Metric> insertedMetrics = new ArrayList<>();
         ArrayList<Metric> retrievedMetrics = new ArrayList<>();
 
         for (int i = 1; i <= 10; ++i) {
@@ -551,8 +552,8 @@ public class HBaseStoreTest {
             insertedMetrics.add(m);
         }
 
-        HashMap<String, Object> settings     = new HashMap<>();
-        HashSet<TimeRange>      timeRangeSet = new HashSet<>();
+        HashMap<String, Object> settings = new HashMap<>();
+        HashSet<TimeRange> timeRangeSet = new HashSet<>();
         timeRangeSet.add(new TimeRange(1L, 10L + 1L, Window.ALL));
         timeRangeSet.add(new TimeRange(101L, 110L + 1L, Window.ALL));
 
@@ -578,7 +579,7 @@ public class HBaseStoreTest {
     @Test
     public void testConcurrentStores() {
 
-        final int  COUNT = 50;
+        final int COUNT = 50;
         HBaseStore otherStore;
         try {
             otherStore = new HBaseStore().prepare(conf);
@@ -587,12 +588,12 @@ public class HBaseStoreTest {
             return;
         }
 
-        int[] timestamps      = generateTimestamps(100000, 110000, COUNT);
+        int[] timestamps = generateTimestamps(100000, 110000, COUNT);
         int[] timestampsOther = generateTimestamps(110000, 120000, COUNT);
 
-        ArrayList<Metric> metricsInserted       = new ArrayList<>(COUNT);
-        ArrayList<Metric> metricsInsertedOther  = new ArrayList<>(COUNT);
-        ArrayList<Metric> metricsRetrieved      = new ArrayList<>(COUNT);
+        ArrayList<Metric> metricsInserted = new ArrayList<>(COUNT);
+        ArrayList<Metric> metricsInsertedOther = new ArrayList<>(COUNT);
+        ArrayList<Metric> metricsRetrieved = new ArrayList<>(COUNT);
         ArrayList<Metric> metricsRetrievedOther = new ArrayList<>(COUNT);
 
         HashSet<TimeRange> timeSet = new HashSet<>();
@@ -601,7 +602,7 @@ public class HBaseStoreTest {
         HashSet<TimeRange> timeSetOther = new HashSet<>();
         timeSetOther.add(new TimeRange(110000L, 120000L, Window.ALL));
 
-        HashMap<String, Object> settings      = new HashMap<>();
+        HashMap<String, Object> settings = new HashMap<>();
         HashMap<String, Object> settingsOther = new HashMap<>();
 
         // insert with both stores

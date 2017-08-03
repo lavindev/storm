@@ -95,8 +95,7 @@ public class AggregatingMetricStoreTest {
             // set ZK info from test cluster
             int zkPort = hbaseTestingUtility.getZkCluster().getClientPort();
             hbaseConf.put("HBaseZookeeperPortOverride", zkPort);
-            hbaseStore = new HBaseStore();
-            hbaseStore.prepare(hbaseConf);
+            hbaseStore = new HBaseStore().prepare(hbaseConf);
 
             // set up rocks db
             HashMap<String, Object> rocksConf = makeConfig(StoreType.ROCKSDB);
