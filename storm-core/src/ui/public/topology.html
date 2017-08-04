@@ -461,6 +461,7 @@
 
                         $("#metrics_graph_selection").submit(function (e) {
                             e.preventDefault();
+                            $("#new-topology-stats-plot-area").html('');
                             var data = $(this).serialize();
                             data += "&topology=".concat(topologyId);
                             renderMetricGraph(data);
