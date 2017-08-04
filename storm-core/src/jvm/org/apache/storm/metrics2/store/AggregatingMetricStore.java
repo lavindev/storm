@@ -37,6 +37,11 @@ public class AggregatingMetricStore implements MetricStore {
         long roundedStartTime;
         long roundedEndTime;
 
+        /**
+         * Calculates rounded start and end times
+         * @param t Timerange
+         * @param resolution resolution (bucket value)
+         */
         BucketInfo(TimeRange t, long resolution) {
             startTime = (t.startTime != null) ? t.startTime : 0L;
             endTime = (t.endTime != null) ? t.endTime : System.currentTimeMillis();
@@ -56,6 +61,10 @@ public class AggregatingMetricStore implements MetricStore {
     }
     // end testing
 
+    /**
+     * Constructor for AggregatingMetricStore
+     * @param store Underlying store to perform queries on
+     */
     public AggregatingMetricStore(MetricStore store) {
         this.store = store;
         _buckets = new ArrayList<>();
@@ -64,11 +73,21 @@ public class AggregatingMetricStore implements MetricStore {
         _buckets.add(1L);  // 1 minutes
     }
 
+    /**
+     * Prepares store
+     * @param config Storm config map
+     * @return this for invocation chaining
+     */
     @Override
     public AggregatingMetricStore prepare(Map config) {
         return this;
     }
 
+    /**
+     * Inserts raw metric and updates its corresponding aggregations for
+     * each bucket
+     * @param metric Metric to store
+     */
     @Override
     public void insert(Metric metric) {
 
@@ -81,6 +100,11 @@ public class AggregatingMetricStore implements MetricStore {
         }
     }
 
+    /**
+     * Updates aggregation metrics if it exists, else creates new agg metric
+     * @param m Raw metric to update aggregates for
+     * @param bucket Bucket to update for
+     */
     private void updateAggregate(Metric m, Long bucket) {
 
         Metric aggMetric       = new Metric(m);
@@ -105,11 +129,22 @@ public class AggregatingMetricStore implements MetricStore {
         store.insert(aggMetric);
     }
 
+    /**
+     * Scans underlying store
+     * @param agg Aggregator
+     */
     @Override
     public void scan(IAggregator agg) {
         store.scan(agg);
     }
 
+    /**
+     * Retrieves bucket for given index. However, if bucket is larger
+     * than given timerange, returns next bucket lesser than timerange
+     * @param i Index for _buckets
+     * @param t Timerange for scan
+     * @return Value for appropriate bucket
+     */
     private Long getBucket(int i, TimeRange t) {
 
         Long res;
@@ -125,6 +160,14 @@ public class AggregatingMetricStore implements MetricStore {
         return res;
     }
 
+    /**
+     * Scans underlying store by dividing timerange into segments and querying at largest possible
+     * resolution. Recursive calls on head and tail of divided timerange with smaller resolutions.
+     * @param settings Map of settings to filter by
+     * @param agg Aggregator
+     * @param t Timerange to scan within
+     * @param bucketsIdx Index of bucket to scan with (determines resolution)
+     */
     private void _scan(HashMap<String, Object> settings, IAggregator agg, TimeRange t, int bucketsIdx) {
 
         Long               res     = getBucket(bucketsIdx, t);
@@ -166,6 +209,11 @@ public class AggregatingMetricStore implements MetricStore {
 
     }
 
+    /**
+     * Initial scan method
+     * @param settings Map of settings to filter by
+     * @param agg IAggregator
+     */
     @Override
     public void scan(HashMap<String, Object> settings, IAggregator agg) {
         HashSet<TimeRange> timeRangeSet = (HashSet<TimeRange>) settings.get(StringKeywords.timeRangeSet);
@@ -185,11 +233,20 @@ public class AggregatingMetricStore implements MetricStore {
         }
     }
 
+    /**
+     * Calls remove on underlying store
+     * @param settings Map of settings to filter by
+     */
     @Override
     public void remove(HashMap<String, Object> settings) {
         store.remove(settings);
     }
 
+    /**
+     * Calls populateValue on underlying store
+     * @param metric Metric to populate
+     * @return whether metric was populated or not
+     */
     @Override
     public boolean populateValue(Metric metric) {
         return store.populateValue(metric);
